@@ -1,4 +1,4 @@
-import Timetable from "../models/Timetable.model.js";
+import Timetable from "../models/timetable.model.js";
 
 export const createTimetable = async (req, res) => {
   try {

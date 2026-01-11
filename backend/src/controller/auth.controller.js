@@ -35,7 +35,7 @@ export const register = async (req, res, next) => {
       email,
       password,
       studentId,
-      role: role || "student",
+      role: "student",
       faculty,
       program,
       yearOfStudy,

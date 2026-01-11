@@ -176,13 +176,14 @@ export const castVote = async (req, res) => {
       });
     }
 
+    // In castVote controller:
     const voting = await Voting.findById(req.params.id);
-
-    if (!voting) {
-      return res.status(404).json({
-        success: false,
-        message: "Voting not found",
-      });
+    if (
+      voting.voteRecords.some(
+        (record) => record.voter.toString() === req.user.id
+      )
+    ) {
+      throw new Error("User has already voted");
     }
 
     // Check if voting is active

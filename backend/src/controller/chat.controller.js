@@ -141,13 +141,14 @@ export const getChatRoomById = async (req, res) => {
       });
     }
 
-    // Get paginated messages
-    const messages = chatRoom.messages
-      .slice(
-        -Number.parseInt(limit) - Number.parseInt(skip),
-        chatRoom.messages.length - Number.parseInt(skip)
-      )
-      .reverse();
+    const parsedLimit = Number.parseInt(limit);
+    const parsedSkip = Number.parseInt(skip);
+    const totalMessages = chatRoom.messages.length;
+
+    // Get the most recent messages, paginated
+    const startIndex = Math.max(0, totalMessages - parsedSkip - parsedLimit);
+    const endIndex = totalMessages - parsedSkip;
+    const messages = chatRoom.messages.slice(startIndex, endIndex);
 
     // Populate message users
     const populatedMessages = await ChatRoom.populate(messages, {

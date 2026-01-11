@@ -31,6 +31,14 @@ const voteRecordSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
+  candidateId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+  },
+  position: {
+    type: String,
+    required: true,
+  },
   votedAt: {
     type: Date,
     default: Date.now,
@@ -100,10 +108,7 @@ const votingSchema = new mongoose.Schema(
 );
 
 // Ensure one vote per user per voting
-votingSchema.index(
-  { "voteRecords.voter": 1, _id: 1 },
-  { unique: true, sparse: true }
-);
+votingSchema.index({ "voteRecords.voter": 1 });
 
 const Voting = mongoose.model("Voting", votingSchema);
 
