@@ -1,11 +1,11 @@
+import bcrypt from "bcryptjs";
 import User from "../models/User.model.js";
 import { generateToken } from "../utils/generateToken.js";
-import { ErrorResponse } from "../utils/errorHandler.js";
 
 // @desc    Register new user
 // @route   POST /api/auth/register
 // @access  Public
-export const register = async (req, res, next) => {
+export const register = async (req, res) => {
   try {
     const {
       firstName,
@@ -28,14 +28,45 @@ export const register = async (req, res, next) => {
       });
     }
 
+    //check studentId uniqueness for students
+    if (role === "student" && studentId) {
+      const existingStudentId = await User.findOne({ studentId });
+      if (existingStudentId) {
+        return res.status(400).json({
+          success: false,
+          message: "Student ID already exists",
+        });
+      }
+    }
+
+    // Check the length of the password
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+      });
+    }
+
+    // Check the length of the studentId for students
+    if (role === "student" && studentId && studentId.length < 13) {
+      return res.status(400).json({
+        success: false,
+        message: "Student ID must be at least 13 characters",
+      });
+    }
+
+    // 🔥 HASH PASSWORD HERE
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     // Create user
     const user = await User.create({
       firstName,
       lastName,
       email,
-      password,
+      password: hashedPassword,
       studentId,
-      role: "student",
+      role,
       faculty,
       program,
       yearOfStudy,
@@ -72,7 +103,7 @@ export const register = async (req, res, next) => {
 // @desc    Login user
 // @route   POST /api/auth/login
 // @access  Public
-export const login = async (req, res, next) => {
+export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -84,8 +115,13 @@ export const login = async (req, res, next) => {
       });
     }
 
+    // Normalize email
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Check for user (including password field)
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email: normalizedEmail }).select(
+      "+password"
+    );
 
     if (!user) {
       return res.status(401).json({
@@ -148,7 +184,7 @@ export const login = async (req, res, next) => {
 // @desc    Get current logged in user
 // @route   GET /api/auth/me
 // @access  Private
-export const getMe = async (req, res, next) => {
+export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
 
@@ -167,7 +203,7 @@ export const getMe = async (req, res, next) => {
 // @desc    Update password
 // @route   PUT /api/auth/update-password
 // @access  Private
-export const updatePassword = async (req, res, next) => {
+export const updatePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
@@ -213,7 +249,7 @@ export const updatePassword = async (req, res, next) => {
 // @desc    Forgot password
 // @route   POST /api/auth/forgot-password
 // @access  Public
-export const forgotPassword = async (req, res, next) => {
+export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 

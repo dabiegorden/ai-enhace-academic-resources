@@ -110,11 +110,10 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 border-b border-gray-800">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-linear-to-r from-red-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-base">FX</span>
+            <span className="text-white font-bold text-base">CUG</span>
           </div>
           <div>
-            <h2 className="font-semibold text-white text-base">Forex Mentor</h2>
-            <p className="text-xs text-gray-400">Trading Dashboard</p>
+            <h2 className="font-semibold text-white text-base">Smart Learn</h2>
           </div>
         </div>
       </SidebarHeader>
