@@ -155,7 +155,7 @@ export default function LoginForm() {
                 value={formData.email}
                 onChange={handleChange}
                 onKeyPress={handleKeyPress}
-                className={`w-full px-4 py-3 rounded-xl border-2 ${
+                className={`w-full px-4 py-3 rounded-xl border-2 text-black ${
                   errors.email ? "border-red-500" : "border-gray-300"
                 } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
                 placeholder="your.email@example.com"
@@ -178,7 +178,7 @@ export default function LoginForm() {
                 value={formData.password}
                 onChange={handleChange}
                 onKeyPress={handleKeyPress}
-                className={`w-full px-4 py-3 rounded-xl border-2 ${
+                className={`w-full px-4 py-3 rounded-xl border-2 text-black ${
                   errors.password ? "border-red-500" : "border-gray-300"
                 } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
                 placeholder="Enter your password"
