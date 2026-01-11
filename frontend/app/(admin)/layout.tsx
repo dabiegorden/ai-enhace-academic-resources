@@ -46,9 +46,9 @@ interface UserData {
   profileImage?: string;
   studentId?: string;
   isActive: boolean;
-  lastLogin?: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  lastLogin?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface AuthResponse {
@@ -62,6 +62,9 @@ function DashboardContent({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  // API URL
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
   useEffect(() => {
     // Check if user is logged in
     const checkUser = async () => {
@@ -73,7 +76,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
           return;
         }
 
-        const res = await fetch("http://localhost:5000/api/auth/me", {
+        const res = await fetch(`${apiUrl}/auth/me`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -84,12 +87,17 @@ function DashboardContent({ children }: { children: ReactNode }) {
         const data: AuthResponse = await res.json();
 
         if (data.success && data.data) {
+          if (data.data.role !== "admin") {
+            toast.error("Access denied. Admin privileges required.");
+            router.push("/");
+            return;
+          }
           setUser(data.data);
         } else {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           toast.error("Session expired. Please login again.");
-          router.push("/sign-in");
+          router.push("/");
         }
       } catch (error) {
         console.log("Auth check failed:", error);

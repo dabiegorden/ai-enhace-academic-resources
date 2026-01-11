@@ -57,6 +57,9 @@ interface AuthResponse {
   message?: string;
 }
 
+// API URL
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
 function DashboardContent({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,7 +76,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
           return;
         }
 
-        const res = await fetch("http://localhost:5000/api/auth/me", {
+        const res = await fetch(`${apiUrl}/auth/me`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -89,7 +92,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           toast.error("Session expired. Please login again.");
-          router.push("/sign-in");
+          router.push("/");
         }
       } catch (error) {
         console.log("Auth check failed:", error);

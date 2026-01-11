@@ -39,6 +39,14 @@ export const register = async (req, res) => {
       }
     }
 
+    // Check if password is provided
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: "Password is required",
+      });
+    }
+
     // Check the length of the password
     if (password.length < 6) {
       return res.status(400).json({
