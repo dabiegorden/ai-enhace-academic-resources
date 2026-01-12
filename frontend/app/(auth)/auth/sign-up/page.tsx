@@ -353,7 +353,7 @@ export default function RegisterForm() {
             <button
               onClick={handleSubmit}
               disabled={loading}
-              className="w-full bg-linear-to-r from-orange-500 via-orange-600 to-orange-700 text-white py-4 rounded-xl font-bold text-lg hover:from-orange-600 hover:via-orange-700 hover:to-orange-800 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed mt-8 transform hover:scale-[1.02]"
+              className="w-full bg-linear-to-r from-blue-600 via-blue-700 to-blue-800 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:via-blue-800 hover:to-blue-900 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02]"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
