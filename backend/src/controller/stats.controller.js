@@ -1,4 +1,4 @@
-import User from "../models/User.model.js";
+import User from "../models/user.model.js";
 import LectureNote from "../models/lecturenote.model.js";
 import ChatRoom from "../models/chatroom.model.js";
 import Assignment from "../models/assignment.model.js";
@@ -8,7 +8,7 @@ import Rating from "../models/rating.model.js";
 import Vote from "../models/voting.model.js";
 
 // Get comprehensive stats for admin dashboard
-export const getAdminStats = async (req, res) => {
+export const getAdminStats = async (_, res) => {
   try {
     // User statistics
     const totalUsers = await User.countDocuments();
@@ -68,14 +68,11 @@ export const getAdminStats = async (req, res) => {
     ]);
 
     // Recent activities
-    const recentUsers = await User.find().sort({ createdAt: -1 }).limit(5);
-    const recentNotes = await LectureNote.find()
+    const recentNotes = await LectureNote.find();
+    const recentUsers = await User.find()
+      .select("firstName lastName email role createdAt")
       .sort({ createdAt: -1 })
       .limit(5);
-    const recentAssignments = await Assignment.find()
-      .sort({ createdAt: -1 })
-      .limit(5);
-
     res.json({
       success: true,
       data: {
@@ -131,15 +128,25 @@ export const getAdminStats = async (req, res) => {
 export const getLecturerStats = async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
 
-    const notesCount = await LectureNote.countDocuments({ uploadedBy: userId });
-    const assignmentsCount = await Assignment.countDocuments({
-      createdBy: userId,
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    const notesCount = await LectureNote.countDocuments({
+      uploadedBy: userObjectId,
     });
-    const examsCount = await Exam.countDocuments({ createdBy: userId });
+    const assignmentsCount = await Assignment.countDocuments({
+      createdBy: userObjectId,
+    });
+    const examsCount = await Exam.countDocuments({ createdBy: userObjectId });
 
     const avgRating = await Rating.aggregate([
-      { $match: { lecturerId: userId } },
+      { $match: { lecturerId: userObjectId } },
       { $group: { _id: null, avgRating: { $avg: "$overallRating" } } },
     ]);
 

@@ -96,14 +96,13 @@ export default function RegisterForm() {
           program: "",
           yearOfStudy: 1,
         });
+        // Redirect to dashboard after successful registration
+        setTimeout(() => {
+          router.push("/student-dashboard");
+        }, 1000);
       } else {
         toast.error(data.message || "Registration failed");
       }
-
-      // Redirect to dashboard after successful registration
-      setTimeout(() => {
-        router.push("/student-dashboard");
-      }, 1000);
     } catch (error) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};

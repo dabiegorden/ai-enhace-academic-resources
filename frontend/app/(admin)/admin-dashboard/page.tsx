@@ -84,6 +84,11 @@ export default function AdminDashboard() {
           },
         });
 
+        if (!response.ok) {
+          toast.error("Failed to fetch stats");
+          return;
+        }
+
         const data = await response.json();
         if (data.success) {
           setStats(data.data);
@@ -242,13 +247,13 @@ export default function AdminDashboard() {
         <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
           <StatsCard
             title="Avg Course Rating"
-            value={stats.ratings.avgCourseRating.toFixed(2)}
+            value={(stats.ratings.avgCourseRating ?? 0).toFixed(2)}
             icon={<Star className="w-5 h-5" />}
             bgColor="from-yellow-500 to-amber-500"
           />
           <StatsCard
             title="Avg Lecturer Rating"
-            value={stats.ratings.avgLecturerRating.toFixed(2)}
+            value={(stats.ratings.avgLecturerRating ?? 0).toFixed(2)}
             icon={<Star className="w-5 h-5" />}
             bgColor="from-orange-500 to-rose-500"
           />
