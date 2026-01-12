@@ -12,114 +12,36 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import {
-  BarChart3,
-  TrendingUp,
-  BookOpen,
-  GraduationCap,
-  Users,
-  MessageSquare,
-  Calendar,
-  FileText,
-  Video,
-  Award,
-  Signal,
-  User,
-} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
+import { adminSidebarItems } from "@/constants";
 
-const menuItems = [
-  {
-    title: "Dashboard",
-    url: "/mauricefx-dashboard",
-    icon: BarChart3,
-  },
-  {
-    title: "Community",
-    items: [
-      {
-        title: "Daily Signals",
-        url: "/mauricefx-dashboard/signals",
-        icon: Signal,
-      },
-      {
-        title: "Students",
-        url: "/mauricefx-dashboard/students",
-        icon: Users,
-      },
-      {
-        title: "Live Sessions",
-        url: "/mauricefx-dashboard/sessions",
-        icon: Calendar,
-      },
-      {
-        title: "Discussion",
-        url: "/mauricefx-dashboard/discussion",
-        icon: MessageSquare,
-      },
-    ],
-  },
-  {
-    title: "Trading",
-    items: [
-      {
-        title: "Market Analysis",
-        url: "/mauricefx-dashboard/market-analysis",
-        icon: TrendingUp,
-      },
-      {
-        title: "Trading Strategies",
-        url: "/mauricefx-dashboard/strategies",
-        icon: BookOpen,
-      },
-      {
-        title: "Performance",
-        url: "/mauricefx-dashboard/performance",
-        icon: Award,
-      },
-    ],
-  },
-  {
-    title: "Education",
-    items: [
-      {
-        title: "Courses",
-        url: "/mauricefx-dashboard/courses",
-        icon: GraduationCap,
-      },
-      {
-        title: "Video Tutorials",
-        url: "/mauricefx-dashboard/tutorials",
-        icon: Video,
-      },
-      {
-        title: "Resources",
-        url: "/mauricefx-dashboard/resources",
-        icon: FileText,
-      },
-    ],
-  },
-];
-
-export function AppSidebar() {
+export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
     <Sidebar className="bg-gray-900 border-r border-gray-800">
       <SidebarHeader className="p-4 border-b border-gray-800">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-linear-to-r from-red-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-base">CUG</span>
+          <div className="w-10 h-10 bg-linear-to-r from-blue-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg">
+            <Image
+              src="/assets/cuglogo.png"
+              alt="CUG"
+              width={32}
+              height={32}
+              className="rounded"
+            />
           </div>
           <div>
-            <h2 className="font-semibold text-white text-base">Smart Learn</h2>
+            <h2 className="font-semibold text-white text-base">CUG Admin</h2>
+            <p className="text-xs text-gray-400">Management Panel</p>
           </div>
         </div>
       </SidebarHeader>
 
       <SidebarContent className="bg-gray-900">
-        {menuItems.map((item, index) => (
+        {adminSidebarItems.map((item, index) => (
           <SidebarGroup key={index}>
             {item.title && !item.items && (
               <SidebarMenu>
@@ -127,7 +49,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.url}
-                    className="w-full hover:bg-gray-800/80 hover:text-white data-[active=true]:bg-linear-to-r data-[active=true]:from-red-500 data-[active=true]:to-pink-500 text-gray-300 data-[active=true]:text-white transition-all duration-200 mx-2 rounded-lg"
+                    className="w-full hover:bg-gray-800/80 hover:text-white data-[active=true]:bg-linear-to-r data-[active=true]:from-blue-500 data-[active=true]:to-orange-500 text-gray-300 data-[active=true]:text-white transition-all duration-200 mx-2 rounded-lg"
                   >
                     <Link
                       href={item.url}
@@ -153,7 +75,7 @@ export function AppSidebar() {
                         <SidebarMenuButton
                           asChild
                           isActive={pathname.startsWith(subItem.url)}
-                          className="hover:bg-gray-800/80 hover:text-white data-[active=true]:bg-linear-to-r data-[active=true]:from-red-500 data-[active=true]:to-pink-500 text-gray-300 data-[active=true]:text-white transition-all duration-200 mx-2 rounded-lg"
+                          className="hover:bg-gray-800/80 hover:text-white data-[active=true]:bg-linear-to-r data-[active=true]:from-blue-500 data-[active=true]:to-orange-500 text-gray-300 data-[active=true]:text-white transition-all duration-200 mx-2 rounded-lg"
                         >
                           <Link
                             href={subItem.url}
@@ -174,11 +96,10 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-gray-800 bg-gray-900">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <div className="w-full">{/* User Info */}</div>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <div className="text-xs text-gray-400">
+          <p>© 2026 CUG SmartLearn</p>
+          <p>Academic Management System</p>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

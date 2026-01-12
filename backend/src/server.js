@@ -18,6 +18,7 @@ import timetableRoutes from "./routes/timetable.routes.js";
 import ratingRoutes from "./routes/rating.routes.js";
 import votingRoutes from "./routes/voting.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
+import statRoutes from "./routes/stats.routes.js";
 
 // Initialize express app
 const app = express();
@@ -59,6 +60,7 @@ app.use("/api/timetables", timetableRoutes);
 app.use("/api/ratings", ratingRoutes);
 app.use("/api/voting", votingRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/stats", statRoutes);
 
 // Health check route
 app.get("/api/health", (_, res) => {
