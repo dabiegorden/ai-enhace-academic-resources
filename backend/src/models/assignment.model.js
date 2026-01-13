@@ -81,6 +81,9 @@ const assignmentSchema = new mongoose.Schema(
       {
         url: String,
         cloudinaryId: String,
+        fileName: String,
+        fileType: String,
+        fileSize: Number,
       },
     ],
     submissions: [submissionSchema],
@@ -94,6 +97,5 @@ const assignmentSchema = new mongoose.Schema(
   }
 );
 
-const Assignment = mongoose.model("Assignment", assignmentSchema);
-
-export default Assignment;
+export default mongoose.models.Assignment ||
+  mongoose.model("Assignment", assignmentSchema);

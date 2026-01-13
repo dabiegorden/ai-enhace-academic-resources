@@ -77,6 +77,5 @@ const lectureNoteSchema = new mongoose.Schema(
 lectureNoteSchema.index({ course: 1, faculty: 1, program: 1, yearOfStudy: 1 });
 lectureNoteSchema.index({ title: "text", description: "text" });
 
-const LectureNote = mongoose.model("LectureNote", lectureNoteSchema);
-
-export default LectureNote;
+export default mongoose.models.LectureNote ||
+  mongoose.model("LectureNote", lectureNoteSchema);

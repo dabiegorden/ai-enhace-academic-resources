@@ -56,6 +56,9 @@ export const createAssignment = async (req, res) => {
         attachments.push({
           url: result.secure_url,
           cloudinaryId: result.public_id,
+          fileName: file.originalname,
+          fileType: file.mimetype,
+          fileSize: file.size,
         });
       }
     }
@@ -286,6 +289,13 @@ export const submitAssignment = async (req, res) => {
       );
       streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
     });
+
+    if (!assignment.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "This assignment is no longer active",
+      });
+    }
 
     // Determine if submission is late
     const isLate = new Date() > new Date(assignment.dueDate);

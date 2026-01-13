@@ -83,6 +83,5 @@ chatRoomSchema.pre("save", function (next) {
   next();
 });
 
-const ChatRoom = mongoose.model("ChatRoom", chatRoomSchema);
-
-export default ChatRoom;
+export default mongoose.models.ChatRoom ||
+  mongoose.model("ChatRoom", chatRoomSchema);

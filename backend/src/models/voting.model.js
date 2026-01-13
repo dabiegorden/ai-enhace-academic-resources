@@ -110,6 +110,4 @@ const votingSchema = new mongoose.Schema(
 // Ensure one vote per user per voting
 votingSchema.index({ "voteRecords.voter": 1 });
 
-const Voting = mongoose.model("Voting", votingSchema);
-
-export default Voting;
+export default mongoose.models.Voting || mongoose.model("Voting", votingSchema);

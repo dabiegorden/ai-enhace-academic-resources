@@ -4,23 +4,21 @@ import path from "path";
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
 
-const fileFilter = (req, file, cb) => {
-  // Allowed file types
-  const allowedTypes = /pdf|doc|docx|ppt|pptx|jpg|jpeg|png/;
-  const extname = allowedTypes.test(
-    path.extname(file.originalname).toLowerCase()
-  );
-  const mimetype = allowedTypes.test(file.mimetype);
+const allowedMimeTypes = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "image/jpeg",
+  "image/png",
+];
 
-  if (mimetype && extname) {
-    return cb(null, true);
-  } else {
-    cb(
-      new Error(
-        "Invalid file type. Only PDF, DOC, DOCX, PPT, PPTX, JPG, JPEG, and PNG files are allowed."
-      )
-    );
+const fileFilter = (req, file, cb) => {
+  if (!allowedMimeTypes.includes(file.mimetype)) {
+    return cb(new Error("Unsupported file type"), false);
   }
+  cb(null, true);
 };
 
 const upload = multer({
