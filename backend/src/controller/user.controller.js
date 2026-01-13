@@ -139,10 +139,14 @@ export const updateUser = async (req, res) => {
 
     await user.save();
 
+    // Exclude password from response
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
     res.status(200).json({
       success: true,
       message: "User updated successfully",
-      data: user,
+      data: userResponse,
     });
   } catch (error) {
     res.status(400).json({

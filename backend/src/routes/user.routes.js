@@ -16,11 +16,11 @@ import upload from "../middleware/upload.middleware.js";
 const router = express.Router();
 
 // Public/Student routes
-router.get("/students/by-program", protect, getStudentsByProgram);
-router.get("/lecturers", protect, getLecturers);
-router.get("/:id", protect, getUserById);
-router.put("/profile", protect, updateProfile);
-router.put("/:id", protect, updateUser);
+router.get("/students/by-program", protect, authorize, getStudentsByProgram);
+router.get("/lecturers", protect, authorize, getLecturers);
+router.get("/:id", protect, authorize, getUserById);
+router.put("/profile", protect, authorize, updateProfile);
+router.put("/:id", protect, authorize, updateUser);
 router.post(
   "/profile-image",
   protect,

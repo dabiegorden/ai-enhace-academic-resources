@@ -275,6 +275,13 @@ export const submitAssignment = async (req, res) => {
       });
     }
 
+    if (!assignment.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "This assignment is no longer active",
+      });
+    }
+
     // Upload file to Cloudinary
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
@@ -289,13 +296,6 @@ export const submitAssignment = async (req, res) => {
       );
       streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
     });
-
-    if (!assignment.isActive) {
-      return res.status(400).json({
-        success: false,
-        message: "This assignment is no longer active",
-      });
-    }
 
     // Determine if submission is late
     const isLate = new Date() > new Date(assignment.dueDate);
