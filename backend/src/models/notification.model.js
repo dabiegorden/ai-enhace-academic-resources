@@ -63,6 +63,5 @@ const notificationSchema = new mongoose.Schema(
 notificationSchema.index({ user: 1, isRead: 1 });
 notificationSchema.index({ scheduledFor: 1, isSent: 1 });
 
-const Notification = mongoose.model("Notification", notificationSchema);
-
-export default Notification;
+export default mongoose.models.Notification ||
+  mongoose.model("Notification", notificationSchema);

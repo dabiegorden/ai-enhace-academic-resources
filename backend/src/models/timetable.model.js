@@ -112,4 +112,5 @@ const timetableSchema = new mongoose.Schema(
 timetableSchema.index({ programCode: 1, academicYear: 1, semester: 1 });
 timetableSchema.index({ yearOfStudy: 1, faculty: 1, academicYear: 1 });
 
-export default mongoose.model("Timetable", timetableSchema);
+export default mongoose.models.Timetable ||
+  mongoose.model("Timetable", timetableSchema);

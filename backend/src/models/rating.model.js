@@ -75,6 +75,4 @@ ratingSchema.index(
   { unique: true, sparse: true }
 );
 
-const Rating = mongoose.model("Rating", ratingSchema);
-
-export default Rating;
+export default mongoose.models.Rating || mongoose.model("Rating", ratingSchema);

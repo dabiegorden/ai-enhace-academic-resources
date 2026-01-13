@@ -3,6 +3,7 @@ import {
   getAllUsers,
   getUserById,
   updateProfile,
+  updateUser,
   uploadProfileImage,
   deleteUser,
   toggleUserStatus,
@@ -19,6 +20,7 @@ router.get("/students/by-program", protect, getStudentsByProgram);
 router.get("/lecturers", protect, getLecturers);
 router.get("/:id", protect, getUserById);
 router.put("/profile", protect, updateProfile);
+router.put("/:id", protect, updateUser);
 router.post(
   "/profile-image",
   protect,

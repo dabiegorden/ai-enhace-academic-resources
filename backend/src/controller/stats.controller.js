@@ -1,4 +1,3 @@
-import User from "../models/user.model.js";
 import LectureNote from "../models/lecturenote.model.js";
 import ChatRoom from "../models/chatroom.model.js";
 import Assignment from "../models/assignment.model.js";
@@ -6,6 +5,8 @@ import Exam from "../models/exam.model.js";
 import Announcement from "../models/announcement.model.js";
 import Rating from "../models/rating.model.js";
 import Vote from "../models/voting.model.js";
+import User from "../models/user.model.js";
+import mongoose from "mongoose";
 
 // Get comprehensive stats for admin dashboard
 export const getAdminStats = async (_, res) => {
@@ -27,7 +28,15 @@ export const getAdminStats = async (_, res) => {
     const totalChatRooms = await ChatRoom.countDocuments();
     const totalMessages = await ChatRoom.aggregate([
       {
-        $group: { _id: null, totalMessages: { $sum: { $size: "$messages" } } },
+        $project: {
+          messageCount: { $size: { $ifNull: ["$messages", []] } },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalMessages: { $sum: "$messageCount" },
+        },
       },
     ]);
 
@@ -71,6 +80,9 @@ export const getAdminStats = async (_, res) => {
     const recentNotes = await LectureNote.find();
     const recentUsers = await User.find()
       .select("firstName lastName email role createdAt")
+      .sort({ createdAt: -1 })
+      .limit(5);
+    const recentAssignments = await Assignment.find()
       .sort({ createdAt: -1 })
       .limit(5);
     res.json({
