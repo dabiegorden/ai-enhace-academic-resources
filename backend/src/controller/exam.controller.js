@@ -1,61 +1,26 @@
 import Exam from "../models/exam.model.js";
 
-// @desc    Create exam
-// @route   POST /api/exams
-// @access  Private (Lecturer/Admin)
+// Create a new exam (draft)
 export const createExam = async (req, res) => {
   try {
-    const {
-      title,
-      description,
-      course,
-      courseCode,
-      faculty,
-      program,
-      yearOfStudy,
-      duration,
-      startDate,
-      endDate,
-      passingScore,
-      lectureNoteIds,
-    } = req.body;
+    const { title, durationInMinutes } = req.body;
 
-    if (
-      !title ||
-      !course ||
-      !courseCode ||
-      !faculty ||
-      !program ||
-      !yearOfStudy ||
-      !duration ||
-      !startDate ||
-      !endDate
-    ) {
+    if (!title || !durationInMinutes) {
       return res.status(400).json({
         success: false,
-        message: "Please provide all required fields",
+        message: "Title and duration are required",
       });
     }
 
     const exam = await Exam.create({
       title,
-      description,
-      course,
-      courseCode,
-      faculty,
-      program,
-      yearOfStudy: Number.parseInt(yearOfStudy),
-      lecturer: req.user.id,
-      duration: Number.parseInt(duration),
-      startDate,
-      endDate,
-      passingScore: passingScore || 50,
-      lectureNotes: lectureNoteIds || [],
+      durationInMinutes: Number.parseInt(durationInMinutes),
+      createdBy: req.user.id,
       questions: [],
-      totalPoints: 0,
+      status: "draft",
     });
 
-    await exam.populate("lecturer", "firstName lastName email");
+    await exam.populate("createdBy", "firstName lastName email");
 
     res.status(201).json({
       success: true,
@@ -70,108 +35,15 @@ export const createExam = async (req, res) => {
   }
 };
 
-// @desc    Add questions to exam
-// @route   POST /api/exams/:id/questions
-// @access  Private (Lecturer/Admin)
-export const addQuestions = async (req, res) => {
-  try {
-    const { questions } = req.body;
-
-    if (!questions || !Array.isArray(questions) || questions.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide valid questions array",
-      });
-    }
-
-    const exam = await Exam.findById(req.params.id);
-
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found",
-      });
-    }
-
-    // Check authorization
-    if (exam.lecturer.toString() !== req.user.id && req.user.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized to modify this exam",
-      });
-    }
-
-    // Add questions and calculate total points
-    exam.questions.push(...questions);
-    exam.totalPoints = exam.questions.reduce((sum, q) => sum + q.points, 0);
-
-    await exam.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Questions added successfully",
-      data: exam,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// @desc    Get all exams
-// @route   GET /api/exams
-// @access  Private
+// Get all exams
 export const getAllExams = async (req, res) => {
   try {
-    const {
-      faculty,
-      program,
-      yearOfStudy,
-      course,
-      status,
-      page = 1,
-      limit = 20,
-    } = req.query;
-
-    const query = {};
-
-    if (faculty) query.faculty = faculty;
-    if (program) query.program = program;
-    if (yearOfStudy) query.yearOfStudy = Number.parseInt(yearOfStudy);
-    if (course) query.course = { $regex: course, $options: "i" };
-
-    // Filter by status
-    const now = new Date();
-    if (status === "upcoming") {
-      query.startDate = { $gt: now };
-      query.isActive = true;
-    } else if (status === "ongoing") {
-      query.startDate = { $lte: now };
-      query.endDate = { $gte: now };
-      query.isActive = true;
-    } else if (status === "completed") {
-      query.endDate = { $lt: now };
-    }
-
-    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
-
-    const exams = await Exam.find(query)
-      .populate("lecturer", "firstName lastName email")
-      .select("-questions")
-      .sort({ startDate: -1 })
-      .skip(skip)
-      .limit(Number.parseInt(limit));
-
-    const total = await Exam.countDocuments(query);
+    const exams = await Exam.find()
+      .populate("createdBy", "firstName lastName email")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
-      count: exams.length,
-      total,
-      page: Number.parseInt(page),
-      pages: Math.ceil(total / Number.parseInt(limit)),
       data: exams,
     });
   } catch (error) {
@@ -182,103 +54,18 @@ export const getAllExams = async (req, res) => {
   }
 };
 
-// @desc    Get my exams (for students)
-// @route   GET /api/exams/my-exams
-// @access  Private (Student)
-export const getMyExams = async (req, res) => {
-  try {
-    if (req.user.role !== "student") {
-      return res.status(403).json({
-        success: false,
-        message: "This endpoint is only for students",
-      });
-    }
-
-    const { status, page = 1, limit = 20 } = req.query;
-
-    const query = {
-      faculty: req.user.faculty,
-      program: req.user.program,
-      yearOfStudy: req.user.yearOfStudy,
-      isActive: true,
-    };
-
-    const now = new Date();
-    if (status === "upcoming") {
-      query.startDate = { $gt: now };
-    } else if (status === "available") {
-      query.startDate = { $lte: now };
-      query.endDate = { $gte: now };
-    }
-
-    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
-
-    const exams = await Exam.find(query)
-      .populate("lecturer", "firstName lastName email")
-      .select("-questions.correctAnswer")
-      .sort({ startDate: 1 })
-      .skip(skip)
-      .limit(Number.parseInt(limit));
-
-    // Check if student has taken each exam
-    const examsWithStatus = exams.map((exam) => {
-      const result = exam.results.find(
-        (r) => r.student.toString() === req.user.id
-      );
-      return {
-        ...exam.toObject(),
-        myResult: result || null,
-        hasTaken: !!result,
-      };
-    });
-
-    const total = await Exam.countDocuments(query);
-
-    res.status(200).json({
-      success: true,
-      count: examsWithStatus.length,
-      total,
-      page: Number.parseInt(page),
-      pages: Math.ceil(total / Number.parseInt(limit)),
-      data: examsWithStatus,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// @desc    Get exam by ID
-// @route   GET /api/exams/:id
-// @access  Private
+// Get single exam
 export const getExamById = async (req, res) => {
   try {
-    const exam = await Exam.findById(req.params.id)
-      .populate("lecturer", "firstName lastName email")
-      .populate("lectureNotes", "title course");
+    const exam = await Exam.findById(req.params.id).populate(
+      "createdBy",
+      "firstName lastName email",
+    );
 
     if (!exam) {
       return res.status(404).json({
         success: false,
         message: "Exam not found",
-      });
-    }
-
-    // If student, hide correct answers
-    if (req.user.role === "student") {
-      const examObj = exam.toObject();
-      examObj.questions = examObj.questions.map((q) => ({
-        _id: q._id,
-        question: q.question,
-        type: q.type,
-        options: q.options,
-        points: q.points,
-      }));
-      return res.status(200).json({
-        success: true,
-        data: examObj,
       });
     }
 
@@ -294,19 +81,11 @@ export const getExamById = async (req, res) => {
   }
 };
 
-// @desc    Take exam (submit answers)
-// @route   POST /api/exams/:id/take
-// @access  Private (Student)
-export const takeExam = async (req, res) => {
+// Add question to exam
+export const addQuestion = async (req, res) => {
   try {
-    const { answers, timeTaken } = req.body;
-
-    if (!answers || !Array.isArray(answers)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide answers",
-      });
-    }
+    const { questionType, questionText, options, correctAnswer, points } =
+      req.body;
 
     const exam = await Exam.findById(req.params.id);
 
@@ -317,62 +96,256 @@ export const takeExam = async (req, res) => {
       });
     }
 
-    // Check if exam is available
-    const now = new Date();
-    if (now < new Date(exam.startDate) || now > new Date(exam.endDate)) {
+    if (exam.status !== "draft") {
       return res.status(400).json({
         success: false,
-        message: "Exam is not available at this time",
+        message: "Cannot modify exam after it has started",
       });
     }
 
-    // Check if already taken
-    const existingResult = exam.results.find(
-      (r) => r.student.toString() === req.user.id
-    );
-    if (existingResult) {
-      return res.status(400).json({
-        success: false,
-        message: "You have already taken this exam",
-      });
-    }
+    const questionNumber = exam.questions.length + 1;
 
-    // Grade the exam
-    let score = 0;
-    const gradedAnswers = answers.map((answer) => {
-      const question = exam.questions.id(answer.questionId);
-      if (
-        question &&
-        answer.answer.toLowerCase().trim() ===
-          question.correctAnswer.toLowerCase().trim()
-      ) {
-        score += question.points;
+    const newQuestion = {
+      questionNumber,
+      questionType,
+      questionText,
+      points: points || 1,
+    };
+
+    if (questionType === "mcq") {
+      if (!options || !correctAnswer) {
+        return res.status(400).json({
+          success: false,
+          message: "MCQ questions require options and correct answer",
+        });
       }
-      return answer;
+      newQuestion.options = options;
+      newQuestion.correctAnswer = correctAnswer;
+    }
+
+    exam.questions.push(newQuestion);
+    await exam.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Question added successfully",
+      data: exam,
     });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
-    const percentage = (score / exam.totalPoints) * 100;
+// Remove question from exam
+export const removeQuestion = async (req, res) => {
+  try {
+    const { questionNumber } = req.params;
 
-    // Save result
-    exam.results.push({
-      student: req.user.id,
-      answers: gradedAnswers,
-      score,
-      totalPoints: exam.totalPoints,
-      percentage: percentage.toFixed(2),
-      timeTaken: timeTaken || exam.duration,
+    const exam = await Exam.findById(req.params.id);
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found",
+      });
+    }
+
+    if (exam.status !== "draft") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot modify exam after it has started",
+      });
+    }
+
+    exam.questions = exam.questions.filter(
+      (q) => q.questionNumber !== Number.parseInt(questionNumber),
+    );
+
+    // Renumber questions
+    exam.questions.forEach((q, index) => {
+      q.questionNumber = index + 1;
     });
 
     await exam.save();
 
-    res.status(201).json({
+    res.status(200).json({
+      success: true,
+      message: "Question removed successfully",
+      data: exam,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Start exam
+export const startExam = async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id);
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found",
+      });
+    }
+
+    if (exam.questions.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot start exam without questions",
+      });
+    }
+
+    if (exam.status === "active") {
+      return res.status(400).json({
+        success: false,
+        message: "Exam is already active",
+      });
+    }
+
+    exam.status = "active";
+    exam.startedAt = new Date();
+    exam.endedAt = new Date(Date.now() + exam.durationInMinutes * 60 * 1000);
+
+    await exam.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Exam started successfully",
+      data: exam,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// End exam
+export const endExam = async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id);
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found",
+      });
+    }
+
+    exam.status = "ended";
+    exam.endedAt = new Date();
+
+    await exam.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Exam ended successfully",
+      data: exam,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Submit exam (for students)
+export const submitExam = async (req, res) => {
+  try {
+    const { answers } = req.body;
+
+    const exam = await Exam.findById(req.params.id);
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found",
+      });
+    }
+
+    if (exam.status !== "active") {
+      return res.status(400).json({
+        success: false,
+        message: "Exam is not active",
+      });
+    }
+
+    // Check if time has expired
+    if (new Date() > exam.endedAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Exam time has expired",
+      });
+    }
+
+    // Check if student already submitted
+    const existingSubmission = exam.submissions.find(
+      (sub) => sub.studentId.toString() === req.user.id,
+    );
+
+    if (existingSubmission) {
+      return res.status(400).json({
+        success: false,
+        message: "You have already submitted this exam",
+      });
+    }
+
+    // Auto-grade MCQ questions
+    const gradedAnswers = answers.map((ans) => {
+      const question = exam.questions.find(
+        (q) => q.questionNumber === ans.questionNumber,
+      );
+
+      if (question.questionType === "mcq") {
+        const isCorrect = ans.answer === question.correctAnswer;
+        return {
+          questionNumber: ans.questionNumber,
+          answer: ans.answer,
+          isCorrect,
+          pointsAwarded: isCorrect ? question.points : 0,
+        };
+      }
+
+      // Theory questions need manual grading
+      return {
+        questionNumber: ans.questionNumber,
+        answer: ans.answer,
+        isCorrect: null,
+        pointsAwarded: 0,
+      };
+    });
+
+    const totalScore = gradedAnswers.reduce(
+      (sum, ans) => sum + (ans.pointsAwarded || 0),
+      0,
+    );
+
+    exam.submissions.push({
+      studentId: req.user.id,
+      answers: gradedAnswers,
+      totalScore,
+      submittedAt: new Date(),
+      autoGraded: true,
+    });
+
+    await exam.save();
+
+    res.status(200).json({
       success: true,
       message: "Exam submitted successfully",
       data: {
-        score,
-        totalPoints: exam.totalPoints,
-        percentage: percentage.toFixed(2),
-        passed: percentage >= exam.passingScore,
+        totalScore,
+        answers: gradedAnswers,
       },
     });
   } catch (error) {
@@ -383,15 +356,10 @@ export const takeExam = async (req, res) => {
   }
 };
 
-// @desc    Get exam results
-// @route   GET /api/exams/:id/results
-// @access  Private (Lecturer/Admin)
-export const getExamResults = async (req, res) => {
+// Get exam for student (hide correct answers)
+export const getExamForStudent = async (req, res) => {
   try {
-    const exam = await Exam.findById(req.params.id).populate(
-      "results.student",
-      "firstName lastName email studentId"
-    );
+    const exam = await Exam.findById(req.params.id);
 
     if (!exam) {
       return res.status(404).json({
@@ -400,17 +368,33 @@ export const getExamResults = async (req, res) => {
       });
     }
 
-    // Check authorization
-    if (exam.lecturer.toString() !== req.user.id && req.user.role !== "admin") {
-      return res.status(403).json({
+    if (exam.status !== "active") {
+      return res.status(400).json({
         success: false,
-        message: "Not authorized to view exam results",
+        message: "Exam is not active",
       });
     }
 
+    // Remove correct answers from questions
+    const sanitizedQuestions = exam.questions.map((q) => {
+      const question = q.toObject();
+      if (question.questionType === "mcq") {
+        delete question.correctAnswer;
+      }
+      return question;
+    });
+
     res.status(200).json({
       success: true,
-      data: exam.results,
+      data: {
+        _id: exam._id,
+        title: exam.title,
+        durationInMinutes: exam.durationInMinutes,
+        startedAt: exam.startedAt,
+        endedAt: exam.endedAt,
+        questions: sanitizedQuestions,
+        totalPoints: exam.totalPoints,
+      },
     });
   } catch (error) {
     res.status(400).json({
@@ -420,9 +404,113 @@ export const getExamResults = async (req, res) => {
   }
 };
 
-// @desc    Update exam
-// @route   PUT /api/exams/:id
-// @access  Private (Lecturer/Admin)
+// Get my exams (for students)
+export const getMyExams = async (req, res) => {
+  try {
+    const exams = await Exam.find({ status: "active" })
+      .select("-questions.correctAnswer")
+      .sort({ startedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: exams,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get exam results
+export const getExamResults = async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id).populate(
+      "submissions.studentId",
+      "firstName lastName email",
+    );
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: exam.submissions,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Grade theory question
+export const gradeTheoryQuestion = async (req, res) => {
+  try {
+    const { studentId, questionNumber, pointsAwarded } = req.body;
+
+    const exam = await Exam.findById(req.params.id);
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found",
+      });
+    }
+
+    const submission = exam.submissions.find(
+      (sub) => sub.studentId.toString() === studentId,
+    );
+
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: "Submission not found",
+      });
+    }
+
+    const answerIndex = submission.answers.findIndex(
+      (ans) => ans.questionNumber === questionNumber,
+    );
+
+    if (answerIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "Answer not found",
+      });
+    }
+
+    submission.answers[answerIndex].pointsAwarded = pointsAwarded;
+    submission.answers[answerIndex].isCorrect = pointsAwarded > 0;
+
+    // Recalculate total score
+    submission.totalScore = submission.answers.reduce(
+      (sum, ans) => sum + (ans.pointsAwarded || 0),
+      0,
+    );
+
+    await exam.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Theory question graded successfully",
+      data: submission,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Update exam
 export const updateExam = async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id);
@@ -434,31 +522,17 @@ export const updateExam = async (req, res) => {
       });
     }
 
-    // Check authorization
-    if (exam.lecturer.toString() !== req.user.id && req.user.role !== "admin") {
-      return res.status(403).json({
+    if (exam.status !== "draft") {
+      return res.status(400).json({
         success: false,
-        message: "Not authorized to update this exam",
+        message: "Cannot update exam that has started or ended",
       });
     }
 
-    const {
-      title,
-      description,
-      duration,
-      startDate,
-      endDate,
-      passingScore,
-      isActive,
-    } = req.body;
+    const { title, durationInMinutes } = req.body;
 
     if (title) exam.title = title;
-    if (description) exam.description = description;
-    if (duration) exam.duration = duration;
-    if (startDate) exam.startDate = startDate;
-    if (endDate) exam.endDate = endDate;
-    if (passingScore) exam.passingScore = passingScore;
-    if (isActive !== undefined) exam.isActive = isActive;
+    if (durationInMinutes) exam.durationInMinutes = durationInMinutes;
 
     await exam.save();
 
@@ -475,9 +549,7 @@ export const updateExam = async (req, res) => {
   }
 };
 
-// @desc    Delete exam
-// @route   DELETE /api/exams/:id
-// @access  Private (Lecturer/Admin)
+// Delete exam
 export const deleteExam = async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id);
@@ -486,14 +558,6 @@ export const deleteExam = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Exam not found",
-      });
-    }
-
-    // Check authorization
-    if (exam.lecturer.toString() !== req.user.id && req.user.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized to delete this exam",
       });
     }
 

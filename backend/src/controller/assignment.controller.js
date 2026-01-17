@@ -1,10 +1,7 @@
 import Assignment from "../models/assignment.model.js";
-import cloudinary from "../config/cloudinary.js";
-import streamifier from "streamifier";
+import fs from "fs";
 
-// @desc    Create assignment
-// @route   POST /api/assignments
-// @access  Private (Lecturer/Admin)
+// Create assignment
 export const createAssignment = async (req, res) => {
   try {
     const {
@@ -18,6 +15,8 @@ export const createAssignment = async (req, res) => {
       dueDate,
       totalMarks,
     } = req.body;
+
+    console.log("[v0] Create assignment request:", req.body);
 
     if (
       !title ||
@@ -35,27 +34,14 @@ export const createAssignment = async (req, res) => {
       });
     }
 
-    // Handle file attachments if provided
+    // Handle optional file attachments
     const attachments = [];
     if (req.files && req.files.length > 0) {
+      console.log("[v0] Processing", req.files.length, "attachments");
       for (const file of req.files) {
-        const result = await new Promise((resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              folder: "cug-assignments",
-              resource_type: "raw",
-            },
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result);
-            }
-          );
-          streamifier.createReadStream(file.buffer).pipe(uploadStream);
-        });
-
         attachments.push({
-          url: result.secure_url,
-          cloudinaryId: result.public_id,
+          url: `/uploads/assignments/${file.filename}`,
+          filePath: file.path,
           fileName: file.originalname,
           fileType: file.mimetype,
           fileSize: file.size,
@@ -73,11 +59,13 @@ export const createAssignment = async (req, res) => {
       yearOfStudy: Number.parseInt(yearOfStudy),
       lecturer: req.user.id,
       dueDate,
-      totalMarks: totalMarks || 100,
+      totalMarks: totalMarks ? Number.parseInt(totalMarks) : 100,
       attachments,
     });
 
     await assignment.populate("lecturer", "firstName lastName email");
+
+    console.log("[v0] Assignment created:", assignment._id);
 
     res.status(201).json({
       success: true,
@@ -85,6 +73,15 @@ export const createAssignment = async (req, res) => {
       data: assignment,
     });
   } catch (error) {
+    console.error("[v0] Error creating assignment:", error);
+    // Clean up uploaded files if error occurs
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file) => {
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+    }
     res.status(400).json({
       success: false,
       message: error.message,
@@ -92,9 +89,7 @@ export const createAssignment = async (req, res) => {
   }
 };
 
-// @desc    Get all assignments
-// @route   GET /api/assignments
-// @access  Private
+// Get all assignments
 export const getAllAssignments = async (req, res) => {
   try {
     const {
@@ -114,7 +109,6 @@ export const getAllAssignments = async (req, res) => {
     if (yearOfStudy) query.yearOfStudy = Number.parseInt(yearOfStudy);
     if (course) query.course = { $regex: course, $options: "i" };
 
-    // Filter by status (active/expired)
     if (status === "active") {
       query.dueDate = { $gte: new Date() };
       query.isActive = true;
@@ -148,9 +142,7 @@ export const getAllAssignments = async (req, res) => {
   }
 };
 
-// @desc    Get my assignments (for students)
-// @route   GET /api/assignments/my-assignments
-// @access  Private (Student)
+// Get my assignments (for students)
 export const getMyAssignments = async (req, res) => {
   try {
     if (req.user.role !== "student") {
@@ -184,10 +176,9 @@ export const getMyAssignments = async (req, res) => {
       .skip(skip)
       .limit(Number.parseInt(limit));
 
-    // Add submission status for each assignment
     const assignmentsWithStatus = assignments.map((assignment) => {
       const submission = assignment.submissions.find(
-        (sub) => sub.student.toString() === req.user.id
+        (sub) => sub.student.toString() === req.user.id,
       );
       return {
         ...assignment.toObject(),
@@ -214,9 +205,7 @@ export const getMyAssignments = async (req, res) => {
   }
 };
 
-// @desc    Get assignment by ID
-// @route   GET /api/assignments/:id
-// @access  Private
+// Get assignment by ID
 export const getAssignmentById = async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id)
@@ -242,9 +231,7 @@ export const getAssignmentById = async (req, res) => {
   }
 };
 
-// @desc    Submit assignment
-// @route   POST /api/assignments/:id/submit
-// @access  Private (Student)
+// Submit assignment
 export const submitAssignment = async (req, res) => {
   try {
     if (!req.file) {
@@ -257,18 +244,23 @@ export const submitAssignment = async (req, res) => {
     const assignment = await Assignment.findById(req.params.id);
 
     if (!assignment) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(404).json({
         success: false,
         message: "Assignment not found",
       });
     }
 
-    // Check if already submitted
     const existingSubmission = assignment.submissions.find(
-      (sub) => sub.student.toString() === req.user.id
+      (sub) => sub.student.toString() === req.user.id,
     );
 
     if (existingSubmission) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(400).json({
         success: false,
         message: "You have already submitted this assignment",
@@ -276,35 +268,22 @@ export const submitAssignment = async (req, res) => {
     }
 
     if (!assignment.isActive) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(400).json({
         success: false,
         message: "This assignment is no longer active",
       });
     }
 
-    // Upload file to Cloudinary
-    const result = await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: "cug-submissions",
-          resource_type: "raw",
-        },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
-      );
-      streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
-    });
-
-    // Determine if submission is late
     const isLate = new Date() > new Date(assignment.dueDate);
 
-    // Add submission
     assignment.submissions.push({
       student: req.user.id,
-      fileUrl: result.secure_url,
-      cloudinaryId: result.public_id,
+      fileUrl: `/uploads/submissions/${req.file.filename}`,
+      fileName: req.file.originalname,
+      filePath: req.file.path,
       submittedAt: new Date(),
       status: isLate ? "late" : "submitted",
     });
@@ -313,15 +292,16 @@ export const submitAssignment = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: `Assignment ${
-        isLate ? "submitted late" : "submitted successfully"
-      }`,
+      message: `Assignment ${isLate ? "submitted late" : "submitted successfully"}`,
       data: {
         submittedAt: new Date(),
         isLate,
       },
     });
   } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(400).json({
       success: false,
       message: error.message,
@@ -329,9 +309,7 @@ export const submitAssignment = async (req, res) => {
   }
 };
 
-// @desc    Grade assignment submission
-// @route   PUT /api/assignments/:id/submissions/:submissionId/grade
-// @access  Private (Lecturer/Admin)
+// Grade submission
 export const gradeSubmission = async (req, res) => {
   try {
     const { grade, feedback } = req.body;
@@ -353,7 +331,6 @@ export const gradeSubmission = async (req, res) => {
       });
     }
 
-    // Check authorization
     if (
       assignment.lecturer.toString() !== req.user.id &&
       req.user.role !== "admin"
@@ -364,7 +341,6 @@ export const gradeSubmission = async (req, res) => {
       });
     }
 
-    // Find submission
     const submission = assignment.submissions.id(submissionId);
 
     if (!submission) {
@@ -374,7 +350,6 @@ export const gradeSubmission = async (req, res) => {
       });
     }
 
-    // Validate grade
     if (grade < 0 || grade > assignment.totalMarks) {
       return res.status(400).json({
         success: false,
@@ -401,9 +376,7 @@ export const gradeSubmission = async (req, res) => {
   }
 };
 
-// @desc    Update assignment
-// @route   PUT /api/assignments/:id
-// @access  Private (Lecturer/Admin)
+// Update assignment
 export const updateAssignment = async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id);
@@ -415,7 +388,6 @@ export const updateAssignment = async (req, res) => {
       });
     }
 
-    // Check authorization
     if (
       assignment.lecturer.toString() !== req.user.id &&
       req.user.role !== "admin"
@@ -431,7 +403,7 @@ export const updateAssignment = async (req, res) => {
     if (title) assignment.title = title;
     if (description) assignment.description = description;
     if (dueDate) assignment.dueDate = dueDate;
-    if (totalMarks) assignment.totalMarks = totalMarks;
+    if (totalMarks) assignment.totalMarks = Number.parseInt(totalMarks);
     if (isActive !== undefined) assignment.isActive = isActive;
 
     await assignment.save();
@@ -449,9 +421,7 @@ export const updateAssignment = async (req, res) => {
   }
 };
 
-// @desc    Delete assignment
-// @route   DELETE /api/assignments/:id
-// @access  Private (Lecturer/Admin)
+// Delete assignment
 export const deleteAssignment = async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id);
@@ -463,7 +433,6 @@ export const deleteAssignment = async (req, res) => {
       });
     }
 
-    // Check authorization
     if (
       assignment.lecturer.toString() !== req.user.id &&
       req.user.role !== "admin"
@@ -474,21 +443,17 @@ export const deleteAssignment = async (req, res) => {
       });
     }
 
-    // Delete attachments from Cloudinary
+    // Delete attachment files
     for (const attachment of assignment.attachments) {
-      if (attachment.cloudinaryId) {
-        await cloudinary.uploader.destroy(attachment.cloudinaryId, {
-          resource_type: "raw",
-        });
+      if (attachment.filePath && fs.existsSync(attachment.filePath)) {
+        fs.unlinkSync(attachment.filePath);
       }
     }
 
-    // Delete submissions from Cloudinary
+    // Delete submission files
     for (const submission of assignment.submissions) {
-      if (submission.cloudinaryId) {
-        await cloudinary.uploader.destroy(submission.cloudinaryId, {
-          resource_type: "raw",
-        });
+      if (submission.filePath && fs.existsSync(submission.filePath)) {
+        fs.unlinkSync(submission.filePath);
       }
     }
 
@@ -506,9 +471,7 @@ export const deleteAssignment = async (req, res) => {
   }
 };
 
-// @desc    Get assignment statistics
-// @route   GET /api/assignments/:id/stats
-// @access  Private (Lecturer/Admin)
+// Get assignment statistics
 export const getAssignmentStats = async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id);
@@ -522,10 +485,10 @@ export const getAssignmentStats = async (req, res) => {
 
     const totalSubmissions = assignment.submissions.length;
     const gradedSubmissions = assignment.submissions.filter(
-      (sub) => sub.status === "graded"
+      (sub) => sub.status === "graded",
     ).length;
     const lateSubmissions = assignment.submissions.filter(
-      (sub) => sub.status === "late"
+      (sub) => sub.status === "late",
     ).length;
 
     const grades = assignment.submissions

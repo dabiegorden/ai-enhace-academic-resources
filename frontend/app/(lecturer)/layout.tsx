@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { AppSidebar } from "@/constants";
+import { LecturerSidebar } from "@/constants";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -161,7 +161,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <LecturerSidebar />
       <SidebarInset>
         {/* Enhanced Header with Dark Theme */}
         <header className="fixed top-0 right-0 left-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14 bg-gray-900/95 backdrop-blur-xl border-b border-gray-800 shadow-lg group-has-data-[collapsible=icon]/sidebar-wrapper:left-12">

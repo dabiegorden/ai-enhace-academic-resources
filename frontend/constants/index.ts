@@ -13,9 +13,10 @@ import {
 } from "lucide-react";
 
 import { AdminSidebar } from "@/components/AdminSidebar";
+import { LecturerSidebar } from "@/components/LecturerSidebar";
 import { StatsCard } from "@/components/StatsCard";
 
-export { AdminSidebar, StatsCard };
+export { AdminSidebar, StatsCard, LecturerSidebar };
 
 export const adminSidebarItems = [
   {
@@ -95,6 +96,64 @@ export const adminSidebarItems = [
         title: "Voting System",
         url: "/admin-dashboard/voting",
         icon: Vote,
+      },
+    ],
+  },
+];
+
+export const lecturerSidebarItems = [
+  {
+    title: "Dashboard",
+    url: "/lecturer-dashboard",
+    icon: LayoutGrid,
+  },
+  {
+    title: "Management",
+    items: [
+      {
+        title: "Students",
+        url: "/lecturer-dashboard/students",
+        icon: Users,
+      },
+    ],
+  },
+  {
+    title: "Academic",
+    items: [
+      {
+        title: "Lecture Notes",
+        url: "/lecturer-dashboard/lecture-notes",
+        icon: FileText,
+      },
+      {
+        title: "Assignments",
+        url: "/lecturer-dashboard/assignments",
+        icon: ClipboardList,
+      },
+      {
+        title: "Examinations",
+        url: "/lecturer-dashboard/examinations",
+        icon: BarChart3,
+      },
+      {
+        title: "Timetables",
+        url: "/lecturer-dashboard/timetables",
+        icon: Calendar,
+      },
+    ],
+  },
+  {
+    title: "Community",
+    items: [
+      {
+        title: "Chat Rooms",
+        url: "/lecturer-dashboard/chat-rooms",
+        icon: MessageSquare,
+      },
+      {
+        title: "Announcements",
+        url: "/lecturer-dashboard/announcements",
+        icon: Bell,
       },
     ],
   },
