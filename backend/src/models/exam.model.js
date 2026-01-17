@@ -106,6 +106,8 @@ examSchema.pre("save", async function () {
       (sum, q) => sum + (q.points || 0),
       0,
     );
+  } else {
+    this.totalPoints = 0;
   }
 });
 

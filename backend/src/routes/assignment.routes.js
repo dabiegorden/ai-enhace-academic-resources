@@ -14,7 +14,7 @@ import {
   uploadAssignments,
   uploadSubmissions,
 } from "../middleware/upload.middleware.js";
-import { protect } from "../middleware/auth.middleware.js";
+import { protect, authorize } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -35,12 +35,28 @@ router.get("/", protect, getAllAssignments);
 router.post(
   "/",
   protect,
+  authorize("lecturer", "admin"),
   uploadAssignments.array("files", 5),
   createAssignment,
 );
-router.put("/:id", protect, updateAssignment);
-router.delete("/:id", protect, deleteAssignment);
-router.put("/:id/submissions/:submissionId/grade", protect, gradeSubmission);
-router.get("/:id/stats", protect, getAssignmentStats);
+router.put("/:id", protect, authorize("lecturer", "admin"), updateAssignment);
+router.delete(
+  "/:id",
+  protect,
+  authorize("lecturer", "admin"),
+  deleteAssignment,
+);
+router.put(
+  "/:id/submissions/:submissionId/grade",
+  protect,
+  authorize("lecturer", "admin"),
+  gradeSubmission,
+);
+router.get(
+  "/:id/stats",
+  protect,
+  authorize("lecturer", "admin"),
+  getAssignmentStats,
+);
 
 export default router;

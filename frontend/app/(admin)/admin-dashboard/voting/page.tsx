@@ -130,7 +130,7 @@ export default function VotingAdmin() {
 
     if (search) {
       filtered = filtered.filter((v) =>
-        v.title.toLowerCase().includes(search.toLowerCase())
+        v.title.toLowerCase().includes(search.toLowerCase()),
       );
     }
 
@@ -158,7 +158,7 @@ export default function VotingAdmin() {
     }
 
     const exists = candidates.some(
-      (c) => c.studentId === currentCandidate.studentId
+      (c) => c.studentId === currentCandidate.studentId,
     );
     if (exists && !currentCandidate._id) {
       toast.error("Candidate already added");
@@ -168,8 +168,8 @@ export default function VotingAdmin() {
     if (currentCandidate._id) {
       setCandidates(
         candidates.map((c) =>
-          c._id === currentCandidate._id ? currentCandidate : c
-        )
+          c._id === currentCandidate._id ? currentCandidate : c,
+        ),
       );
     } else {
       setCandidates([...candidates, currentCandidate]);
@@ -203,14 +203,9 @@ export default function VotingAdmin() {
 
   const combineDateTime = (date: string, time: string): string => {
     if (!date || !time) return "";
-    const [hours, minutes] = time.split(":");
-    const dateObj = new Date(date);
-    dateObj.setHours(
-      Number.parseInt(hours, 10),
-      Number.parseInt(minutes, 10),
-      0,
-      0
-    );
+    const [year, month, day] = date.split("-").map(Number);
+    const [hours, minutes] = time.split(":").map(Number);
+    const dateObj = new Date(year, month - 1, day, hours, minutes, 0, 0);
     return dateObj.toISOString();
   };
 
@@ -254,15 +249,15 @@ export default function VotingAdmin() {
       form.append("type", formData.type);
       form.append(
         "positions",
-        JSON.stringify(formData.positions.split(",").map((p) => p.trim()))
+        JSON.stringify(formData.positions.split(",").map((p) => p.trim())),
       );
       form.append(
         "startDate",
-        combineDateTime(formData.startDate, formData.startTime)
+        combineDateTime(formData.startDate, formData.startTime),
       );
       form.append(
         "endDate",
-        combineDateTime(formData.endDate, formData.endTime)
+        combineDateTime(formData.endDate, formData.endTime),
       );
 
       if (formData.type === "faculty") {
@@ -354,15 +349,15 @@ export default function VotingAdmin() {
       form.append("type", formData.type);
       form.append(
         "positions",
-        JSON.stringify(formData.positions.split(",").map((p) => p.trim()))
+        JSON.stringify(formData.positions.split(",").map((p) => p.trim())),
       );
       form.append(
         "startDate",
-        combineDateTime(formData.startDate, formData.startTime)
+        combineDateTime(formData.startDate, formData.startTime),
       );
       form.append(
         "endDate",
-        combineDateTime(formData.endDate, formData.endTime)
+        combineDateTime(formData.endDate, formData.endTime),
       );
 
       if (formData.type === "faculty") {
@@ -445,14 +440,14 @@ export default function VotingAdmin() {
             Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
           },
           body: JSON.stringify({}),
-        }
+        },
       );
 
       if (!response.ok) throw new Error("Failed to publish results");
 
       const data = await response.json();
       const updated = votings.map((v) =>
-        v._id === selectedVoting._id ? data.data : v
+        v._id === selectedVoting._id ? data.data : v,
       );
       setVotings(updated);
       filterVotings(updated, searchTerm, typeFilter);
@@ -597,7 +592,7 @@ export default function VotingAdmin() {
             {filteredVotings.map((voting) => {
               const status = getVotingStatus(voting);
               const firstCandidateImage = voting.candidates.find(
-                (c) => c.imageUrl
+                (c) => c.imageUrl,
               )?.imageUrl;
 
               return (
@@ -628,8 +623,8 @@ export default function VotingAdmin() {
                               status === "Active"
                                 ? "bg-green-500/20 text-green-400"
                                 : status === "Upcoming"
-                                ? "bg-blue-500/20 text-blue-400"
-                                : "bg-gray-500/20 text-gray-400"
+                                  ? "bg-blue-500/20 text-blue-400"
+                                  : "bg-gray-500/20 text-gray-400"
                             }`}
                           >
                             {status}
@@ -1061,8 +1056,8 @@ export default function VotingAdmin() {
               {actionLoading
                 ? "Loading..."
                 : editDialogOpen
-                ? "Update"
-                : "Create"}
+                  ? "Update"
+                  : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -102,7 +102,12 @@ export default function AdminAssignmentsPage() {
       const data = await response.json();
 
       if (data.success) {
-        setAssignments(data.data);
+        const normalized = data.data.map((assignment: Assignment) => ({
+          ...assignment,
+          attachments: assignment.attachments ?? [],
+          submissions: assignment.submissions ?? [],
+        }));
+        setAssignments(normalized);
       }
     } catch (error) {
       console.error("[v0] Error fetching assignments:", error);

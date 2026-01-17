@@ -23,7 +23,7 @@ const uploadImageToCloudinary = async (file, filename) => {
           console.log("[v0] Cloudinary upload success:", result.secure_url);
           resolve(result);
         }
-      }
+      },
     );
 
     stream.end(file.buffer);
@@ -71,7 +71,14 @@ export const createVoting = async (req, res) => {
 
     let parsedCandidates = [];
     if (candidates) {
-      parsedCandidates = JSON.parse(candidates);
+      try {
+        parsedCandidates = JSON.parse(candidates);
+      } catch (parseError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid candidates JSON format",
+        });
+      }
     }
 
     // Create a map of files by their fieldname
@@ -107,20 +114,20 @@ export const createVoting = async (req, res) => {
             console.log(
               "[v0] Image uploaded for candidate:",
               candidate.name,
-              uploadResult.secure_url
+              uploadResult.secure_url,
             );
           } catch (uploadError) {
             console.error(
               "[v0] Image upload error for candidate:",
               candidate.name,
-              uploadError
+              uploadError,
             );
             // Continue without image if upload fails
           }
         }
 
         return candidateObj;
-      })
+      }),
     );
 
     const voting = new Voting({
@@ -226,13 +233,13 @@ export const updateVoting = async (req, res) => {
                   }-${Date.now()}`;
                   const uploadResult = await uploadImageToCloudinary(
                     file,
-                    filename
+                    filename,
                   );
                   existingCandidate.imageUrl = uploadResult.secure_url;
                   console.log(
                     "[v0] Image updated for candidate:",
                     candidate.name,
-                    uploadResult.secure_url
+                    uploadResult.secure_url,
                   );
                 } catch (uploadError) {
                   console.error("[v0] Image upload error:", uploadError);
@@ -260,13 +267,13 @@ export const updateVoting = async (req, res) => {
               }-${Date.now()}`;
               const uploadResult = await uploadImageToCloudinary(
                 file,
-                filename
+                filename,
               );
               newCandidateObj.imageUrl = uploadResult.secure_url;
               console.log(
                 "[v0] New image uploaded for candidate:",
                 candidate.name,
-                uploadResult.secure_url
+                uploadResult.secure_url,
               );
             } catch (uploadError) {
               console.error("[v0] Image upload error:", uploadError);
@@ -274,7 +281,7 @@ export const updateVoting = async (req, res) => {
           }
 
           return newCandidateObj;
-        })
+        }),
       );
 
       voting.candidates = updatedCandidates;
@@ -319,7 +326,7 @@ export const deleteVoting = async (req, res) => {
               const fileWithExtension = urlParts[urlParts.length - 1];
               const publicId = fileWithExtension.split(".")[0];
               await cloudinary.uploader.destroy(
-                `voting/candidates/${publicId}`
+                `voting/candidates/${publicId}`,
               );
               console.log("[v0] Deleted image from Cloudinary:", publicId);
             } catch (error) {
@@ -327,7 +334,7 @@ export const deleteVoting = async (req, res) => {
               // Continue deleting even if image deletion fails
             }
           }
-        })
+        }),
       );
     }
 
@@ -402,7 +409,7 @@ export const getVotingById = async (req, res) => {
   try {
     const voting = await Voting.findById(req.params.id).populate(
       "createdBy",
-      "firstName lastName email"
+      "firstName lastName email",
     );
 
     if (!voting) {
@@ -414,7 +421,7 @@ export const getVotingById = async (req, res) => {
 
     // Check if user has voted
     const hasVoted = voting.voteRecords.some(
-      (record) => record.voter.toString() === req.user.id
+      (record) => record.voter.toString() === req.user.id,
     );
 
     // Don't show vote counts if voting is still active and results not published
@@ -466,7 +473,7 @@ export const castVote = async (req, res) => {
 
     if (
       voting.voteRecords.some(
-        (record) => record.voter.toString() === req.user.id
+        (record) => record.voter.toString() === req.user.id,
       )
     ) {
       return res.status(400).json({

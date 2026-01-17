@@ -85,7 +85,7 @@ const AdminRatingsPage = () => {
     list: Rating[],
     search: string,
     type: string,
-    semester: string
+    semester: string,
   ) => {
     let filtered = list;
 
@@ -99,8 +99,8 @@ const AdminRatingsPage = () => {
           );
         } else {
           return (
-            r.lecturer?.firstName.toLowerCase().includes(searchLower) ||
-            r.lecturer?.lastName.toLowerCase().includes(searchLower)
+            (r.lecturer?.firstName ?? "").toLowerCase().includes(searchLower) ||
+            (r.lecturer?.lastName ?? "").toLowerCase().includes(searchLower)
           );
         }
       });
@@ -221,7 +221,7 @@ const AdminRatingsPage = () => {
                       ))}
                       <span
                         className={`ml-2 font-semibold ${getRatingColor(
-                          rating.rating
+                          rating.rating,
                         )}`}
                       >
                         {rating.rating}/5

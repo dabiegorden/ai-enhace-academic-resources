@@ -104,25 +104,15 @@ export const adminSidebarItems = [
 export const lecturerSidebarItems = [
   {
     title: "Dashboard",
-    url: "/admin-dashboard",
+    url: "/lecturer-dashboard",
     icon: LayoutGrid,
   },
   {
     title: "Management",
     items: [
       {
-        title: "Users",
-        url: "/admin-dashboard/users",
-        icon: Users,
-      },
-      {
-        title: "Lecturers",
-        url: "/admin-dashboard/lecturers",
-        icon: BookOpen,
-      },
-      {
         title: "Students",
-        url: "/admin-dashboard/students",
+        url: "/lecturer-dashboard/students",
         icon: Users,
       },
     ],
@@ -132,22 +122,22 @@ export const lecturerSidebarItems = [
     items: [
       {
         title: "Lecture Notes",
-        url: "/admin-dashboard/lecture-notes",
+        url: "/lecturer-dashboard/lecture-notes",
         icon: FileText,
       },
       {
         title: "Assignments",
-        url: "/admin-dashboard/assignments",
+        url: "/lecturer-dashboard/assignments",
         icon: ClipboardList,
       },
       {
         title: "Examinations",
-        url: "/admin-dashboard/examinations",
+        url: "/lecturer-dashboard/examinations",
         icon: BarChart3,
       },
       {
         title: "Timetables",
-        url: "/admin-dashboard/timetables",
+        url: "/lecturer-dashboard/timetables",
         icon: Calendar,
       },
     ],
@@ -157,28 +147,13 @@ export const lecturerSidebarItems = [
     items: [
       {
         title: "Chat Rooms",
-        url: "/admin-dashboard/chat-rooms",
+        url: "/lecturer-dashboard/chat-rooms",
         icon: MessageSquare,
       },
       {
         title: "Announcements",
-        url: "/admin-dashboard/announcements",
+        url: "/lecturer-dashboard/announcements",
         icon: Bell,
-      },
-    ],
-  },
-  {
-    title: "Feedback",
-    items: [
-      {
-        title: "Ratings & Reviews",
-        url: "/admin-dashboard/ratings",
-        icon: Star,
-      },
-      {
-        title: "Voting System",
-        url: "/admin-dashboard/voting",
-        icon: Vote,
       },
     ],
   },

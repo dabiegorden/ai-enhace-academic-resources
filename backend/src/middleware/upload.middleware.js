@@ -12,7 +12,7 @@ const fileFilter = (req, file, cb) => {
   if (!allowedMimeTypes.includes(file.mimetype)) {
     return cb(
       new Error("Unsupported file type. Only image files are allowed"),
-      false
+      false,
     );
   }
   cb(null, true);
@@ -98,14 +98,14 @@ const documentFileFilter = (req, file, cb) => {
 
   const ext = path.extname(file.originalname).toLowerCase();
 
-  if (allowedMimes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
+  if (allowedMimes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
     cb(
       new Error(
-        "Invalid file type. Allowed types: PDF, Word, PowerPoint, Images, Excel"
+        "Invalid file type. Allowed types: PDF, Word, PowerPoint, Images, Excel",
       ),
-      false
+      false,
     );
   }
 };
