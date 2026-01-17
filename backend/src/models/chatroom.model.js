@@ -75,12 +75,10 @@ const chatRoomSchema = new mongoose.Schema(
   }
 );
 
-// Update last activity on new message
-chatRoomSchema.pre("save", function (next) {
+chatRoomSchema.pre("save", async function () {
   if (this.isModified("messages")) {
-    this.lastActivity = Date.now();
+    this.lastActivity = new Date();
   }
-  next();
 });
 
 export default mongoose.models.ChatRoom ||

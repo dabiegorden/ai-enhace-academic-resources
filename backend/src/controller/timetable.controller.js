@@ -1,4 +1,159 @@
 import Timetable from "../models/timetable.model.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const uploadTimetableDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded",
+      });
+    }
+
+    const timetable = await Timetable.findById(id);
+
+    if (!timetable) {
+      // Clean up uploaded file if timetable not found
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({
+        success: false,
+        message: "Timetable not found",
+      });
+    }
+
+    // Delete old file if exists
+    if (timetable.timetableDocument && timetable.timetableDocument.filename) {
+      const oldFilePath = path.join(
+        __dirname,
+        "../public/uploads/timetables",
+        timetable.timetableDocument.filename
+      );
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+      }
+    }
+
+    const fileExtension = path.extname(req.file.originalname).toLowerCase();
+    const fileType = [".xls", ".xlsx", ".ods"].includes(fileExtension)
+      ? "excel"
+      : "pdf";
+
+    timetable.timetableDocument = {
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      fileType: fileType,
+      fileSize: req.file.size,
+      uploadedAt: new Date(),
+      uploadedBy: req.user.id,
+    };
+
+    await timetable.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Document uploaded successfully",
+      data: timetable,
+    });
+  } catch (error) {
+    // Clean up uploaded file on error
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const downloadTimetableDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const timetable = await Timetable.findById(id).populate(
+      "timetableDocument.uploadedBy",
+      "firstName lastName"
+    );
+
+    if (!timetable || !timetable.timetableDocument) {
+      return res.status(404).json({
+        success: false,
+        message: "Document not found for this timetable",
+      });
+    }
+
+    const filePath = path.join(
+      __dirname,
+      "../public/uploads/timetables",
+      timetable.timetableDocument.filename
+    );
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: "File not found on server",
+      });
+    }
+
+    res.download(filePath, timetable.timetableDocument.originalName, (err) => {
+      if (err) {
+        console.error("Download error:", err);
+      }
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const deleteTimetableDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const timetable = await Timetable.findById(id);
+
+    if (!timetable) {
+      return res.status(404).json({
+        success: false,
+        message: "Timetable not found",
+      });
+    }
+
+    if (timetable.timetableDocument && timetable.timetableDocument.filename) {
+      const filePath = path.join(
+        __dirname,
+        "../public/uploads/timetables",
+        timetable.timetableDocument.filename
+      );
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    timetable.timetableDocument = null;
+    await timetable.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Document deleted successfully",
+      data: timetable,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 export const createTimetable = async (req, res) => {
   try {
@@ -17,6 +172,7 @@ export const createTimetable = async (req, res) => {
       !programCode ||
       !programName ||
       !yearOfStudy ||
+      !level ||
       !faculty ||
       !semester ||
       !academicYear

@@ -1,33 +1,35 @@
 import mongoose from "mongoose";
 
-const courseSessionSchema = new mongoose.Schema({
-  courseCode: {
-    type: String,
-    required: true,
+const courseSessionSchema = new mongoose.Schema(
+  {
+    courseCode: {
+      type: String,
+      required: false,
+    },
+    courseName: String,
+    lecturer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    location: String,
+    room: String,
+    lecturer_initials: String,
   },
-  courseName: String,
-  lecturer: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-  },
-  location: String, // e.g., "DAGF2B", "SMDGF2B"
-  room: String,
-  lecturer_initials: String, // e.g., "DAG", "SMD"
-});
+  { _id: false }
+); // Added _id: false to prevent sub-document IDs
 
-// Time slot schema for each day-time intersection
 const timeSlotSchema = new mongoose.Schema({
   slotNumber: {
     type: Number,
-    required: true, // 1-10 for 7am-6pm
+    required: true,
   },
   startTime: {
     type: String,
-    required: true, // Format: "07:00"
+    required: true,
   },
   endTime: {
     type: String,
-    required: true, // Format: "08:00"
+    required: true,
   },
   monday: courseSessionSchema,
   tuesday: courseSessionSchema,
@@ -36,23 +38,48 @@ const timeSlotSchema = new mongoose.Schema({
   friday: courseSessionSchema,
 });
 
+const timetableDocumentSchema = new mongoose.Schema({
+  filename: {
+    type: String,
+    required: true,
+  },
+  originalName: {
+    type: String,
+    required: true,
+  },
+  fileType: {
+    type: String,
+    enum: ["pdf", "excel"],
+    required: true,
+  },
+  fileSize: Number,
+  uploadedAt: {
+    type: Date,
+    default: Date.now,
+  },
+  uploadedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+});
+
 const timetableSchema = new mongoose.Schema(
   {
     programCode: {
       type: String,
-      required: [true, "Program code is required"], // e.g., "SBIT101", "DIP100", "EBA300"
+      required: [true, "Program code is required"],
     },
     programName: {
       type: String,
-      required: true, // e.g., "Software Business IT", "Banking and Finance"
+      required: true,
     },
     yearOfStudy: {
       type: Number,
-      required: [true, "Year of study is required"], // 1, 2, 3, 4
+      required: [true, "Year of study is required"],
     },
     level: {
       type: String,
-      enum: ["100", "200", "300", "400"], // For easier filtering
+      enum: ["100", "200", "300", "400"],
       required: true,
     },
     faculty: {
@@ -66,12 +93,11 @@ const timetableSchema = new mongoose.Schema(
     },
     academicYear: {
       type: String,
-      required: [true, "Academic year is required"], // Format: "2025/2026"
+      required: [true, "Academic year is required"],
     },
-    specialization: String, // For differentiated programs e.g., "Accounting", "HRM"
+    specialization: String,
     timeSlots: [timeSlotSchema],
     breakTime: {
-      // MASS BREAK
       startTime: {
         type: String,
         default: "11:00",
@@ -85,6 +111,7 @@ const timetableSchema = new mongoose.Schema(
         default: "MASS BREAK",
       },
     },
+    timetableDocument: timetableDocumentSchema,
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -108,7 +135,6 @@ const timetableSchema = new mongoose.Schema(
   }
 );
 
-// Index for efficient queries
 timetableSchema.index({ programCode: 1, academicYear: 1, semester: 1 });
 timetableSchema.index({ yearOfStudy: 1, faculty: 1, academicYear: 1 });
 

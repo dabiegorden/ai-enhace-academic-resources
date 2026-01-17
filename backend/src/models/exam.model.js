@@ -1,61 +1,62 @@
 import mongoose from "mongoose";
 
 const questionSchema = new mongoose.Schema({
-  question: {
+  questionNumber: {
+    type: Number,
+    required: true,
+  },
+  questionType: {
+    type: String,
+    enum: ["mcq", "theory"],
+    required: true,
+  },
+  questionText: {
     type: String,
     required: true,
   },
-  type: {
-    type: String,
-    enum: ["multiple-choice", "true-false", "short-answer"],
-    required: true,
+  // For MCQ questions only
+  options: {
+    A: String,
+    B: String,
+    C: String,
+    D: String,
   },
-  options: [
-    {
-      type: String,
-    },
-  ],
   correctAnswer: {
     type: String,
-    required: true,
+    enum: ["A", "B", "C", "D", ""],
+    default: "",
   },
   points: {
     type: Number,
-    required: true,
     default: 1,
   },
 });
 
-const examResultSchema = new mongoose.Schema({
-  student: {
+const submissionSchema = new mongoose.Schema({
+  studentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
   },
   answers: [
     {
-      questionId: mongoose.Schema.Types.ObjectId,
+      questionNumber: Number,
       answer: String,
+      isCorrect: Boolean,
+      pointsAwarded: Number,
     },
   ],
-  score: {
+  totalScore: {
     type: Number,
-    required: true,
+    default: 0,
   },
-  totalPoints: {
-    type: Number,
-    required: true,
-  },
-  percentage: {
-    type: Number,
-    required: true,
-  },
-  completedAt: {
+  submittedAt: {
     type: Date,
     default: Date.now,
   },
-  timeTaken: {
-    type: Number, // in minutes
+  autoGraded: {
+    type: Boolean,
+    default: false,
   },
 });
 
@@ -63,78 +64,51 @@ const examSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: [true, "Title is required"],
+      required: true,
       trim: true,
     },
-    description: {
-      type: String,
-    },
-    course: {
-      type: String,
-      required: [true, "Course is required"],
-    },
-    courseCode: {
-      type: String,
-      required: [true, "Course code is required"],
-    },
-    faculty: {
-      type: String,
-      required: [true, "Faculty is required"],
-    },
-    program: {
-      type: String,
-      required: [true, "Program is required"],
-    },
-    yearOfStudy: {
-      type: Number,
-      required: [true, "Year of study is required"],
-    },
-    lecturer: {
+    createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    lectureNotes: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "LectureNote",
-      },
-    ],
     questions: [questionSchema],
-    duration: {
-      type: Number, // in minutes
-      required: [true, "Duration is required"],
+    durationInMinutes: {
+      type: Number,
+      required: true,
     },
-    startDate: {
-      type: Date,
-      required: [true, "Start date is required"],
+    status: {
+      type: String,
+      enum: ["draft", "active", "ended"],
+      default: "draft",
     },
-    endDate: {
+    startedAt: {
       type: Date,
-      required: [true, "End date is required"],
+    },
+    endedAt: {
+      type: Date,
     },
     totalPoints: {
       type: Number,
-      required: true,
+      default: 0,
     },
-    passingScore: {
-      type: Number,
-      required: true,
-      default: 50,
-    },
-    results: [examResultSchema],
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    aiGenerated: {
-      type: Boolean,
-      default: false,
-    },
+    submissions: [submissionSchema],
   },
   {
     timestamps: true,
-  }
+  },
 );
 
-export default mongoose.models.Exam || mongoose.model("Exam", examSchema);
+// Calculate total points before saving
+examSchema.pre("save", async function () {
+  if (this.questions && this.questions.length > 0) {
+    this.totalPoints = this.questions.reduce(
+      (sum, q) => sum + (q.points || 0),
+      0,
+    );
+  }
+});
+
+const Exam = mongoose.models.Exam || mongoose.model("Exam", examSchema);
+
+export default Exam;

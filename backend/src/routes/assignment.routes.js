@@ -10,45 +10,37 @@ import {
   deleteAssignment,
   getAssignmentStats,
 } from "../controller/assignment.controller.js";
-import { protect, authorize } from "../middleware/auth.middleware.js";
-import upload from "../middleware/upload.middleware.js";
+import {
+  uploadAssignments,
+  uploadSubmissions,
+} from "../middleware/upload.middleware.js";
+import { protect } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // Student routes
 router.get("/my-assignments", protect, getMyAssignments);
-router.post("/:id/submit", protect, upload.single("file"), submitAssignment);
+router.post(
+  "/:id/submit",
+  protect,
+  uploadSubmissions.single("file"),
+  submitAssignment,
+);
 
 // General routes
 router.get("/:id", protect, getAssignmentById);
 router.get("/", protect, getAllAssignments);
 
-// Lecturer/Admin routes
+// Lecturer/Admin routes - File upload is optional
 router.post(
   "/",
   protect,
-  authorize("lecturer", "admin"),
-  upload.array("files", 5),
-  createAssignment
+  uploadAssignments.array("files", 5),
+  createAssignment,
 );
-router.put("/:id", protect, authorize("lecturer", "admin"), updateAssignment);
-router.delete(
-  "/:id",
-  protect,
-  authorize("lecturer", "admin"),
-  deleteAssignment
-);
-router.put(
-  "/:id/submissions/:submissionId/grade",
-  protect,
-  authorize("lecturer", "admin"),
-  gradeSubmission
-);
-router.get(
-  "/:id/stats",
-  protect,
-  authorize("lecturer", "admin"),
-  getAssignmentStats
-);
+router.put("/:id", protect, updateAssignment);
+router.delete("/:id", protect, deleteAssignment);
+router.put("/:id/submissions/:submissionId/grade", protect, gradeSubmission);
+router.get("/:id/stats", protect, getAssignmentStats);
 
 export default router;

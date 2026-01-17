@@ -10,8 +10,13 @@ const submissionSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  cloudinaryId: {
+  fileName: {
     type: String,
+    required: true,
+  },
+  filePath: {
+    type: String,
+    required: true,
   },
   submittedAt: {
     type: Date,
@@ -80,7 +85,7 @@ const assignmentSchema = new mongoose.Schema(
     attachments: [
       {
         url: String,
-        cloudinaryId: String,
+        filePath: String,
         fileName: String,
         fileType: String,
         fileSize: Number,
@@ -94,8 +99,10 @@ const assignmentSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
-export default mongoose.models.Assignment ||
-  mongoose.model("Assignment", assignmentSchema);
+const Assignment =
+  mongoose.models.Assignment || mongoose.model("Assignment", assignmentSchema);
+
+export default Assignment;

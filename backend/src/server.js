@@ -19,6 +19,7 @@ import ratingRoutes from "./routes/rating.routes.js";
 import votingRoutes from "./routes/voting.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import statRoutes from "./routes/stats.routes.js";
+import { startExamScheduler } from "./utils/examScheduler.js";
 
 // Initialize express app
 const app = express();
@@ -42,7 +43,7 @@ app.use(
   cors({
     origin: process.env.FRONTEND_URL,
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -81,6 +82,8 @@ const PORT = ENV.PORT;
 
 const startServer = async () => {
   await connectDB();
+
+  startExamScheduler();
   server.listen(PORT, () => {
     console.log(`Server running in ${ENV.NODE_ENV} mode on port ${PORT}`);
   });
