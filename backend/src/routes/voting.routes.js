@@ -13,16 +13,28 @@ import upload from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
-router.get("/:id", protect, getVotingById);
+// IMPORTANT: Specific routes MUST come before parameterized routes
+// Otherwise /:id will match everything including "/vote"
+
+// List all voting events
 router.get("/", protect, getAllVoting);
 
-// Use .any() to accept dynamic field names like candidate_0, candidate_1, etc.
+// Create new voting
 router.post("/", protect, authorize("admin"), upload.any(), createVoting);
 
+// Cast vote - MUST be before /:id route
+router.post("/:id/vote", protect, castVote);
+
+// Publish results - MUST be before /:id route
+router.put("/:id/publish-results", protect, authorize("admin"), publishResults);
+
+// Update voting
 router.put("/:id", protect, authorize("admin"), upload.any(), updateVoting);
 
-router.post("/:id/vote", protect, castVote);
-router.put("/:id/publish-results", protect, authorize("admin"), publishResults);
+// Delete voting
 router.delete("/:id", protect, authorize("admin"), deleteVoting);
+
+// Get single voting - MUST be last among /:id routes
+router.get("/:id", protect, getVotingById);
 
 export default router;

@@ -25,12 +25,17 @@ router.post(
   "/profile-image",
   protect,
   upload.single("image"),
-  uploadProfileImage
+  uploadProfileImage,
 );
 
 // Admin only routes
-router.get("/", protect, authorize("admin"), getAllUsers);
-router.delete("/:id", protect, authorize("admin"), deleteUser);
-router.put("/:id/toggle-status", protect, authorize("admin"), toggleUserStatus);
+router.get("/", protect, authorize("lecturer", "admin"), getAllUsers);
+router.delete("/:id", protect, authorize("lecturer", "admin"), deleteUser);
+router.put(
+  "/:id/toggle-status",
+  protect,
+  authorize("lecturer", "admin"),
+  toggleUserStatus,
+);
 
 export default router;

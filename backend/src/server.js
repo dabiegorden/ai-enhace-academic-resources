@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import http from "http";
+import path from "path";
+import { fileURLToPath } from "url";
 import { Server as SocketIOServer } from "socket.io";
 import { setupSocketHandlers } from "./utils/socketHandlers.js";
 import connectDB from "./config/mongodb.js";
@@ -20,6 +22,10 @@ import votingRoutes from "./routes/voting.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import statRoutes from "./routes/stats.routes.js";
 import { startExamScheduler } from "./utils/examScheduler.js";
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize express app
 const app = express();
@@ -47,6 +53,10 @@ app.use(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from the public directory
+// This allows access to uploaded files via /uploads/* URLs
+app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 
 // Routes
 app.use("/api/auth", authRoutes);

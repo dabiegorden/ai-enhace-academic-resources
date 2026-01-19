@@ -27,7 +27,7 @@ export const summarizeLectureNote = async (req, res) => {
       });
     }
 
-    const models = getGeminiModel();
+    const model = getGeminiModel("gemini-2.0-flash-exp");
 
     const prompt = `You are an AI assistant helping students understand lecture materials. 
 Summarize the following lecture note in a clear, concise manner suitable for students:
@@ -43,12 +43,9 @@ Please provide:
 
 Keep the summary academic but accessible.`;
 
-    const response = await models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-    });
-
-    const summary = response.text;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const summary = response.text();
 
     // Save summary to database
     lectureNote.aiSummary = summary;
@@ -63,9 +60,9 @@ Keep the summary academic but accessible.`;
     });
   } catch (error) {
     console.error("AI Summary error:", error);
-    res.status(400).json({
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to generate summary",
     });
   }
 };
@@ -99,7 +96,7 @@ ${lectureNote.aiSummary ? `Summary: ${lectureNote.aiSummary}` : ""}
       }
     }
 
-    const models = getGeminiModel();
+    const model = getGeminiModel("gemini-2.0-flash-exp");
 
     const prompt = `You are an AI academic assistant for Catholic University of Ghana students. 
 Answer the following student question clearly and concisely.
@@ -116,12 +113,9 @@ Provide a clear, educational answer that:
 
 Keep the response academic but friendly and accessible.`;
 
-    const response = await models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-    });
-
-    const answer = response.text;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const answer = response.text();
 
     res.status(200).json({
       success: true,
@@ -132,9 +126,9 @@ Keep the response academic but friendly and accessible.`;
     });
   } catch (error) {
     console.error("AI Answer error:", error);
-    res.status(400).json({
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to get answer",
     });
   }
 };
@@ -146,7 +140,7 @@ export const summarizeChatDiscussion = async (req, res) => {
   try {
     const chatRoom = await ChatRoom.findById(req.params.roomId).populate(
       "messages.user",
-      "firstName lastName"
+      "firstName lastName",
     );
 
     if (!chatRoom) {
@@ -169,11 +163,11 @@ export const summarizeChatDiscussion = async (req, res) => {
     // Format messages for AI
     const messagesText = recentMessages
       .map(
-        (msg) => `${msg.user.firstName} ${msg.user.lastName}: ${msg.message}`
+        (msg) => `${msg.user.firstName} ${msg.user.lastName}: ${msg.message}`,
       )
       .join("\n");
 
-    const models = getGeminiModel();
+    const model = getGeminiModel("gemini-2.0-flash-exp");
 
     const prompt = `You are summarizing a student discussion in a chat room for ${chatRoom.name}.
 
@@ -188,12 +182,9 @@ Provide a concise summary that includes:
 
 Keep it brief and focused on academic content.`;
 
-    const response = await models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-    });
-
-    const summary = response.text;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const summary = response.text();
 
     // Save summary to chat room
     chatRoom.aiSummary = summary;
@@ -208,9 +199,9 @@ Keep it brief and focused on academic content.`;
     });
   } catch (error) {
     console.error("AI Chat Summary error:", error);
-    res.status(400).json({
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to summarize chat",
     });
   }
 };
@@ -250,24 +241,20 @@ Title: ${note.title}
 Course: ${note.course}
 Description: ${note.description || ""}
 ${note.aiSummary ? `Summary: ${note.aiSummary}` : ""}
-    `
+    `,
       )
       .join("\n---\n");
 
-    const models = getGeminiModel();
+    const model = getGeminiModel("gemini-2.0-flash-exp");
 
     const prompt = `You are creating exam questions for university students based on lecture materials.
 
 Lecture Materials:
 ${notesContext}
 
-Generate ${
-      numberOfQuestions || 10
-    } exam questions with the following requirements:
+Generate ${numberOfQuestions || 10} exam questions with the following requirements:
 - Difficulty Level: ${difficulty || "Medium"}
-- Question Types: ${
-      questionTypes?.join(", ") || "multiple-choice, true-false, short-answer"
-    }
+- Question Types: ${questionTypes?.join(", ") || "multiple-choice, true-false, short-answer"}
 
 For each question, provide:
 1. The question text
@@ -289,12 +276,9 @@ Format your response as a JSON array of question objects with this structure:
 
 Ensure questions test understanding, not just memorization.`;
 
-    const response = await models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-    });
-
-    let generatedText = response.text;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let generatedText = response.text();
 
     // Clean up the response to extract JSON
     generatedText = generatedText
@@ -330,9 +314,9 @@ Ensure questions test understanding, not just memorization.`;
     });
   } catch (error) {
     console.error("AI Exam Generation error:", error);
-    res.status(400).json({
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to generate exam questions",
     });
   }
 };
@@ -344,7 +328,7 @@ export const getStudySuggestions = async (req, res) => {
   try {
     const { course, topics, upcomingExam } = req.body;
 
-    const models = getGeminiModel();
+    const model = getGeminiModel("gemini-2.0-flash-exp");
 
     const prompt = `You are an AI study advisor for university students at Catholic University of Ghana.
 
@@ -362,12 +346,9 @@ Provide personalized study suggestions including:
 
 Keep advice practical and encouraging.`;
 
-    const response = await models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-    });
-
-    const suggestions = response.text;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const suggestions = response.text();
 
     res.status(200).json({
       success: true,
@@ -377,9 +358,9 @@ Keep advice practical and encouraging.`;
     });
   } catch (error) {
     console.error("AI Study Suggestions error:", error);
-    res.status(400).json({
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to generate study suggestions",
     });
   }
 };
@@ -398,7 +379,7 @@ export const explainConcept = async (req, res) => {
       });
     }
 
-    const models = getGeminiModel();
+    const model = getGeminiModel("gemini-2.0-flash-exp");
 
     const prompt = `You are an AI tutor helping students understand academic concepts.
 
@@ -414,12 +395,9 @@ Please explain this concept in a way that:
 
 Use clear, accessible language while maintaining academic accuracy.`;
 
-    const response = await models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-    });
-
-    const explanation = response.text;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const explanation = response.text();
 
     res.status(200).json({
       success: true,
@@ -430,9 +408,9 @@ Use clear, accessible language while maintaining academic accuracy.`;
     });
   } catch (error) {
     console.error("AI Explain Concept error:", error);
-    res.status(400).json({
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to explain concept",
     });
   }
 };

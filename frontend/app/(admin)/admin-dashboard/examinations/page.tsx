@@ -153,7 +153,10 @@ export default function AdminExaminationsPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
   const [viewQuestionsDialogOpen, setViewQuestionsDialogOpen] = useState(false);
+  const [viewSubmissionsDialogOpen, setViewSubmissionsDialogOpen] =
+    useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
+  const [examWithSubmissions, setExamWithSubmissions] = useState<any>(null);
 
   // Form states
   const [examTitle, setExamTitle] = useState("");
@@ -478,6 +481,30 @@ export default function AdminExaminationsPage() {
     setViewQuestionsDialogOpen(true);
   };
 
+  const openViewSubmissionsDialog = async (exam: Exam) => {
+    try {
+      setActionLoading(true);
+      const response = await fetch(`${apiUrl}/exams/${exam._id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setExamWithSubmissions(data.data);
+        setViewSubmissionsDialogOpen(true);
+      } else {
+        toast.error("Failed to fetch submissions");
+      }
+    } catch (error) {
+      console.error("Error fetching submissions:", error);
+      toast.error("Failed to fetch submissions");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "draft":
@@ -616,15 +643,28 @@ export default function AdminExaminationsPage() {
                     </>
                   )}
                   {exam.status === "ended" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full bg-transparent"
-                      onClick={() => openViewQuestionsDialog(exam)}
-                    >
-                      <Eye className="mr-2 size-4" />
-                      View Questions & Results
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full bg-transparent"
+                        onClick={() => openViewQuestionsDialog(exam)}
+                      >
+                        <Eye className="mr-2 size-4" />
+                        View Questions
+                      </Button>
+                      {exam.submissions && exam.submissions.length > 0 && (
+                        <Button
+                          size="sm"
+                          className="w-full"
+                          onClick={() => openViewSubmissionsDialog(exam)}
+                          disabled={actionLoading}
+                        >
+                          <CheckCircle2 className="mr-2 size-4" />
+                          View Submissions ({exam.submissions.length})
+                        </Button>
+                      )}
+                    </>
                   )}
                   <Button
                     variant="outline"
@@ -900,6 +940,202 @@ export default function AdminExaminationsPage() {
             <Button
               variant="outline"
               onClick={() => setViewQuestionsDialogOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Submissions Dialog */}
+      <Dialog
+        open={viewSubmissionsDialogOpen}
+        onOpenChange={setViewSubmissionsDialogOpen}
+      >
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {examWithSubmissions?.title} - Student Submissions
+            </DialogTitle>
+            <DialogDescription>
+              {examWithSubmissions?.submissions?.length || 0} submission(s)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            {examWithSubmissions?.submissions &&
+            examWithSubmissions.submissions.length > 0 ? (
+              examWithSubmissions.submissions.map(
+                (submission: any, idx: number) => {
+                  const percentage = examWithSubmissions.totalPoints
+                    ? Math.round(
+                        (submission.totalScore /
+                          examWithSubmissions.totalPoints) *
+                          100,
+                      )
+                    : 0;
+                  const hasTheoryQuestions = submission.answers.some(
+                    (ans: any) => ans.isCorrect === null,
+                  );
+
+                  return (
+                    <Card key={idx}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-lg">
+                              Student: {submission.studentId}
+                            </CardTitle>
+                            <CardDescription>
+                              Submitted:{" "}
+                              {new Date(
+                                submission.submittedAt,
+                              ).toLocaleString()}
+                            </CardDescription>
+                          </div>
+                          <div className="text-right">
+                            <Badge
+                              className={
+                                percentage >= 70
+                                  ? "bg-green-100 text-green-700"
+                                  : percentage >= 50
+                                    ? "bg-yellow-100 text-yellow-700"
+                                    : "bg-red-100 text-red-700"
+                              }
+                            >
+                              {percentage}%
+                            </Badge>
+                            <p className="text-2xl font-bold text-blue-600 mt-2">
+                              {submission.totalScore} /{" "}
+                              {examWithSubmissions.totalPoints}
+                            </p>
+                            {submission.autoGraded && (
+                              <Badge variant="outline" className="mt-2">
+                                Auto-Graded
+                              </Badge>
+                            )}
+                            {hasTheoryQuestions && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Pending manual grading
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <p className="font-semibold text-sm">
+                            Answer Details:
+                          </p>
+                          {submission.answers.map((ans: any) => {
+                            const question = examWithSubmissions.questions.find(
+                              (q: any) =>
+                                q.questionNumber === ans.questionNumber,
+                            );
+                            return (
+                              <div
+                                key={ans.questionNumber}
+                                className={`rounded-lg border p-3 ${
+                                  ans.isCorrect === true
+                                    ? "border-green-300 bg-green-50"
+                                    : ans.isCorrect === false
+                                      ? "border-red-300 bg-red-50"
+                                      : "border-gray-300 bg-gray-50"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline">
+                                      Q{ans.questionNumber}
+                                    </Badge>
+                                    <Badge variant="secondary">
+                                      {question?.questionType === "mcq"
+                                        ? "MCQ"
+                                        : "Theory"}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="font-semibold text-sm">
+                                      {ans.pointsAwarded} /{" "}
+                                      {question?.points || 0} pts
+                                    </span>
+                                    {ans.isCorrect === true && (
+                                      <CheckCircle2 className="inline ml-2 size-4 text-green-600" />
+                                    )}
+                                    {ans.isCorrect === false && (
+                                      <span className="inline ml-2 text-red-600">
+                                        ✗
+                                      </span>
+                                    )}
+                                    {ans.isCorrect === null && (
+                                      <span className="inline ml-2 text-gray-600">
+                                        (pending)
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <p className="text-sm mb-2 text-gray-900">
+                                  <strong>Question:</strong>{" "}
+                                  {question?.questionText}
+                                </p>
+                                <p className="text-sm text-gray-900">
+                                  <strong>Student Answer:</strong>{" "}
+                                  {question?.questionType === "mcq" ? (
+                                    <span className="text-gray-900">
+                                      {ans.answer}
+                                      {question.options &&
+                                        question.options[ans.answer] && (
+                                          <span className="text-gray-700">
+                                            {" "}
+                                            - {question.options[ans.answer]}
+                                          </span>
+                                        )}
+                                    </span>
+                                  ) : (
+                                    <span className="block mt-1 p-2 bg-white rounded border text-gray-900">
+                                      {ans.answer}
+                                    </span>
+                                  )}
+                                </p>
+                                {question?.questionType === "mcq" &&
+                                  question.correctAnswer && (
+                                    <p className="text-sm mt-2 text-green-700">
+                                      <strong>Correct Answer:</strong>{" "}
+                                      {question.correctAnswer}
+                                      {question.options &&
+                                        question.options[
+                                          question.correctAnswer
+                                        ] && (
+                                          <span>
+                                            {" "}
+                                            -{" "}
+                                            {
+                                              question.options[
+                                                question.correctAnswer
+                                              ]
+                                            }
+                                          </span>
+                                        )}
+                                    </p>
+                                  )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                },
+              )
+            ) : (
+              <p className="text-center text-muted-foreground py-8">
+                No submissions yet
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setViewSubmissionsDialogOpen(false)}
             >
               Close
             </Button>

@@ -14,6 +14,7 @@ import {
   gradeTheoryQuestion,
   updateExam,
   deleteExam,
+  getMyExamsSubmissions,
 } from "../controller/exam.controller.js";
 import { authorize, protect } from "../middleware/auth.middleware.js";
 
@@ -53,8 +54,9 @@ router.put("/:id", protect, authorize("lecturer", "admin"), updateExam);
 router.delete("/:id", protect, authorize("lecturer", "admin"), deleteExam);
 
 // Student routes
-router.get("/:id/student", protect, getExamForStudent);
 router.get("/my-exams", protect, getMyExams);
+router.get("/my-submissions", protect, getMyExamsSubmissions);
+router.get("/:id/student", protect, getExamForStudent);
 router.post("/:id/submit", protect, submitExam);
 
 export default router;

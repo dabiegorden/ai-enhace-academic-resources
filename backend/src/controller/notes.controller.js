@@ -1,6 +1,10 @@
-import cloudinary from "../config/cloudinary.js";
 import LectureNote from "../models/lecturenote.model.js";
-import streamifier from "streamifier";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // @desc    Upload lecture note
 // @route   POST /api/notes
@@ -34,33 +38,30 @@ export const uploadLectureNote = async (req, res) => {
       !program ||
       !yearOfStudy
     ) {
+      // Clean up uploaded file if validation fails
+      if (req.file) {
+        const filePath = path.join(
+          __dirname,
+          "../public/uploads/assignments",
+          req.file.filename,
+        );
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
       return res.status(400).json({
         success: false,
         message: "Please provide all required fields",
       });
     }
 
-    // Determine file type
-    const fileExtension = req.file.originalname.split(".").pop().toLowerCase();
-    const resourceType = "raw";
+    // Determine file type from extension
+    const fileExtension = path
+      .extname(req.file.originalname)
+      .slice(1)
+      .toLowerCase();
 
-    // Upload to Cloudinary
-    const result = await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: "cug-lecture-notes",
-          resource_type: resourceType,
-          format: fileExtension,
-        },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
-      );
-      streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
-    });
-
-    // Create lecture note document
+    // Create lecture note document with filename pattern (like timetable)
     const lectureNote = await LectureNote.create({
       title,
       description,
@@ -69,10 +70,10 @@ export const uploadLectureNote = async (req, res) => {
       faculty,
       program,
       yearOfStudy: Number.parseInt(yearOfStudy),
-      fileUrl: result.secure_url,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
       fileType: fileExtension,
       fileSize: req.file.size,
-      cloudinaryId: result.public_id,
       uploadedBy: req.user.id,
       tags: tags ? JSON.parse(tags) : [],
     });
@@ -87,6 +88,19 @@ export const uploadLectureNote = async (req, res) => {
     });
   } catch (error) {
     console.error("Upload error:", error);
+
+    // Clean up uploaded file on error
+    if (req.file) {
+      const filePath = path.join(
+        __dirname,
+        "../public/uploads/assignments",
+        req.file.filename,
+      );
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
     res.status(400).json({
       success: false,
       message: error.message,
@@ -158,7 +172,7 @@ export const getLectureNoteById = async (req, res) => {
   try {
     const lectureNote = await LectureNote.findById(req.params.id).populate(
       "uploadedBy",
-      "firstName lastName email role"
+      "firstName lastName email role",
     );
 
     if (!lectureNote) {
@@ -236,7 +250,7 @@ export const updateLectureNote = async (req, res) => {
       {
         new: true,
         runValidators: true,
-      }
+      },
     ).populate("uploadedBy", "firstName lastName email");
 
     res.status(200).json({
@@ -277,11 +291,17 @@ export const deleteLectureNote = async (req, res) => {
       });
     }
 
-    // Delete from Cloudinary
-    if (lectureNote.cloudinaryId) {
-      await cloudinary.uploader.destroy(lectureNote.cloudinaryId, {
-        resource_type: "raw",
-      });
+    // Delete file from local storage using filename
+    if (lectureNote.filename) {
+      const filePath = path.join(
+        __dirname,
+        "../public/uploads/assignments",
+        lectureNote.filename,
+      );
+
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
     }
 
     await lectureNote.deleteOne();
@@ -298,10 +318,72 @@ export const deleteLectureNote = async (req, res) => {
   }
 };
 
-// @desc    Download lecture note
+// @desc    Download lecture note (returns URL instead of streaming)
 // @route   GET /api/notes/:id/download
 // @access  Private
 export const downloadLectureNote = async (req, res) => {
+  try {
+    const lectureNote = await LectureNote.findById(req.params.id).populate(
+      "uploadedBy",
+      "firstName lastName",
+    );
+
+    if (!lectureNote) {
+      return res.status(404).json({
+        success: false,
+        message: "Lecture note not found",
+      });
+    }
+
+    if (!lectureNote.filename) {
+      return res.status(404).json({
+        success: false,
+        message: "File not found for this lecture note",
+      });
+    }
+
+    const filePath = path.join(
+      __dirname,
+      "../public/uploads/assignments",
+      lectureNote.filename,
+    );
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: "File not found on server",
+      });
+    }
+
+    // Increment downloads
+    lectureNote.downloads += 1;
+    await lectureNote.save();
+
+    // Return the file URL instead of streaming
+    // Construct the URL to access the file via the static middleware
+    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/assignments/${lectureNote.filename}`;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        fileUrl,
+        filename: lectureNote.originalName,
+        fileType: lectureNote.fileType,
+        fileSize: lectureNote.fileSize,
+      },
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Preview lecture note (streams file for preview)
+// @route   GET /api/notes/:id/preview
+// @access  Private
+export const previewLectureNote = async (req, res) => {
   try {
     const lectureNote = await LectureNote.findById(req.params.id);
 
@@ -312,17 +394,52 @@ export const downloadLectureNote = async (req, res) => {
       });
     }
 
-    // Increment downloads
-    lectureNote.downloads += 1;
+    if (!lectureNote.filename) {
+      return res.status(404).json({
+        success: false,
+        message: "File not found for this lecture note",
+      });
+    }
+
+    const filePath = path.join(
+      __dirname,
+      "../public/uploads/assignments",
+      lectureNote.filename,
+    );
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: "File not found on server",
+      });
+    }
+
+    // Increment views
+    lectureNote.views += 1;
     await lectureNote.save();
 
-    res.status(200).json({
-      success: true,
-      data: {
-        fileUrl: lectureNote.fileUrl,
-        fileName: `${lectureNote.title}.${lectureNote.fileType}`,
-      },
-    });
+    // Set content type based on file type
+    const contentTypes = {
+      pdf: "application/pdf",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ppt: "application/vnd.ms-powerpoint",
+      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
+
+    const contentType =
+      contentTypes[lectureNote.fileType] || "application/octet-stream";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${lectureNote.originalName}"`,
+    );
+
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
   } catch (error) {
     res.status(400).json({
       success: false,
@@ -392,16 +509,27 @@ export const getMyLectureNotes = async (req, res) => {
 // @access  Private (Lecturer)
 export const getMyUploadedNotes = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20, search } = req.query;
+
+    const query = { uploadedBy: req.user.id };
+
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { course: { $regex: search, $options: "i" } },
+        { courseCode: { $regex: search, $options: "i" } },
+      ];
+    }
 
     const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
 
-    const lectureNotes = await LectureNote.find({ uploadedBy: req.user.id })
+    const lectureNotes = await LectureNote.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number.parseInt(limit));
 
-    const total = await LectureNote.countDocuments({ uploadedBy: req.user.id });
+    const total = await LectureNote.countDocuments(query);
 
     res.status(200).json({
       success: true,

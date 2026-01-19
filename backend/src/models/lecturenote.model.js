@@ -31,20 +31,22 @@ const lectureNoteSchema = new mongoose.Schema(
       type: Number,
       required: [true, "Year of study is required"],
     },
-    fileUrl: {
+    // Updated to match timetable document structure
+    filename: {
       type: String,
-      required: [true, "File URL is required"],
+      required: [true, "Filename is required"],
+    },
+    originalName: {
+      type: String,
+      required: [true, "Original filename is required"],
     },
     fileType: {
       type: String,
-      enum: ["pdf", "doc", "docx", "ppt", "pptx"],
+      enum: ["pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"],
       required: true,
     },
     fileSize: {
       type: Number,
-    },
-    cloudinaryId: {
-      type: String,
     },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -70,12 +72,15 @@ const lectureNoteSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Index for efficient searching
 lectureNoteSchema.index({ course: 1, faculty: 1, program: 1, yearOfStudy: 1 });
 lectureNoteSchema.index({ title: "text", description: "text" });
 
-export default mongoose.models.LectureNote ||
+const LectureNote =
+  mongoose.models.LectureNote ||
   mongoose.model("LectureNote", lectureNoteSchema);
+
+export default LectureNote;

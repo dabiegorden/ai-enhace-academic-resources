@@ -10,7 +10,6 @@ import { Separator } from "@/components/ui/separator";
 import {
   Breadcrumb,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
@@ -29,9 +28,9 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { AppSidebar } from "@/constants";
 import Link from "next/link";
 import Image from "next/image";
+import { StudentSidebar } from "@/components/StudentSidebar";
 
 // TypeScript Interfaces
 interface UserData {
@@ -125,7 +124,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
   // Get user initials for avatar
   const getUserInitials = (user: UserData): string => {
     return `${user.firstName.charAt(0)}${user.lastName.charAt(
-      0
+      0,
     )}`.toUpperCase();
   };
 
@@ -161,7 +160,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <StudentSidebar />
       <SidebarInset>
         {/* Enhanced Header with Dark Theme */}
         <header className="fixed top-0 right-0 left-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14 bg-gray-900/95 backdrop-blur-xl border-b border-gray-800 shadow-lg group-has-data-[collapsible=icon]/sidebar-wrapper:left-12">
@@ -275,7 +274,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
                           <div className="flex items-center gap-2 mt-1">
                             <span
                               className={`text-[10px] px-2 py-0.5 rounded-full ${getRoleBadgeColor(
-                                user.role
+                                user.role,
                               )} text-white font-bold uppercase tracking-wider`}
                             >
                               {user.role}

@@ -158,3 +158,56 @@ export const lecturerSidebarItems = [
     ],
   },
 ];
+
+export const studentSidebaritems = [
+  {
+    title: "Dashboard",
+    url: "/student-dashboard",
+    icon: LayoutGrid,
+  },
+  {
+    title: "Academic",
+    items: [
+      {
+        title: "Lecture Notes",
+        url: "/student-dashboard/lecture-notes",
+        icon: FileText,
+      },
+      {
+        title: "Examinations",
+        url: "/student-dashboard/examinations",
+        icon: ClipboardList,
+      },
+      {
+        title: "Assignments",
+        url: "/student-dashboard/assignments",
+        icon: BarChart3,
+      },
+      {
+        title: "Timetables",
+        url: "/student-dashboard/timetables",
+        icon: Calendar,
+      },
+      {
+        title: "Voting System",
+        url: "/student-dashboard/voting",
+        icon: Vote,
+      },
+    ],
+  },
+  {
+    title: "Community",
+    items: [
+      {
+        title: "Chat Rooms",
+        url: "/student-dashboard/chat-rooms",
+        icon: MessageSquare,
+      },
+      {
+        title: "Announcements",
+        url: "/student-dashboard/announcements",
+        icon: Bell,
+      },
+    ],
+  },
+];

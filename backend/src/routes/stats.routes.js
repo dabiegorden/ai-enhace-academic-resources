@@ -15,11 +15,16 @@ router.get("/admin", protect, authorize("admin"), getAdminStats);
 router.get(
   "/lecturer/:userId",
   protect,
-  authorize("lecturer"),
-  getLecturerStats
+  authorize("lecturer", "admin"),
+  getLecturerStats,
 );
 
 // Student stats
-router.get("/student/:userId", protect, authorize("student"), getStudentStats);
+router.get(
+  "/student/:userId",
+  protect,
+  authorize("student", "admin", "lecturer"),
+  getStudentStats,
+);
 
 export default router;

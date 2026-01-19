@@ -1,11 +1,12 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { ENV } from "./env.js";
 
-// Initialize Google Gemini AI - API key is read from GEMINI_API_KEY env variable
-const ai = new GoogleGenAI({});
+// Initialize Google Gemini AI with API key from environment
+const genAI = new GoogleGenerativeAI(ENV.GEMINI_API_KEY);
 
-// Get AI models instance for generating content
+// Get AI model instance for generating content
 export const getGeminiModel = (modelName = "gemini-2.0-flash-exp") => {
-  return ai.models;
+  return genAI.getGenerativeModel({ model: modelName });
 };
 
-export { ai };
+export { genAI };

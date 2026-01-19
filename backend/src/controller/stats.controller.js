@@ -77,7 +77,9 @@ export const getAdminStats = async (_, res) => {
     ]);
 
     // Recent activities
-    const recentNotes = await LectureNote.find();
+    const recentNotes = await LectureNote.find()
+      .sort({ createdAt: -1 })
+      .limit(5);
     const recentUsers = await User.find()
       .select("firstName lastName email role createdAt")
       .sort({ createdAt: -1 })
@@ -85,6 +87,7 @@ export const getAdminStats = async (_, res) => {
     const recentAssignments = await Assignment.find()
       .sort({ createdAt: -1 })
       .limit(5);
+
     res.json({
       success: true,
       data: {
@@ -128,6 +131,7 @@ export const getAdminStats = async (_, res) => {
       },
     });
   } catch (error) {
+    console.error("[v0] Error fetching admin stats:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching stats",
@@ -140,6 +144,9 @@ export const getAdminStats = async (_, res) => {
 export const getLecturerStats = async (req, res) => {
   try {
     const { userId } = req.params;
+
+    console.log("[v0] Fetching lecturer stats for userId:", userId);
+
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
@@ -152,15 +159,26 @@ export const getLecturerStats = async (req, res) => {
     const notesCount = await LectureNote.countDocuments({
       uploadedBy: userObjectId,
     });
+
     const assignmentsCount = await Assignment.countDocuments({
       createdBy: userObjectId,
     });
-    const examsCount = await Exam.countDocuments({ createdBy: userObjectId });
+
+    const examsCount = await Exam.countDocuments({
+      createdBy: userObjectId,
+    });
 
     const avgRating = await Rating.aggregate([
       { $match: { lecturerId: userObjectId } },
       { $group: { _id: null, avgRating: { $avg: "$overallRating" } } },
     ]);
+
+    console.log("[v0] Lecturer stats:", {
+      notesCount,
+      assignmentsCount,
+      examsCount,
+      avgRating: avgRating[0]?.avgRating || 0,
+    });
 
     res.json({
       success: true,
@@ -172,6 +190,7 @@ export const getLecturerStats = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("[v0] Error fetching lecturer stats:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching lecturer stats",
@@ -185,16 +204,33 @@ export const getStudentStats = async (req, res) => {
   try {
     const { userId } = req.params;
 
+    console.log("[v0] Fetching student stats for userId:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
     const submittedAssignments = await Assignment.countDocuments({
-      "submissions.studentId": userId,
+      "submissions.studentId": userObjectId,
     });
 
     const completedExams = await Exam.countDocuments({
-      "submissions.studentId": userId,
+      "submissions.studentId": userObjectId,
     });
 
     const chatRoomsJoined = await ChatRoom.countDocuments({
-      members: userId,
+      members: userObjectId,
+    });
+
+    console.log("[v0] Student stats:", {
+      submittedAssignments,
+      completedExams,
+      chatRoomsJoined,
     });
 
     res.json({
@@ -206,6 +242,7 @@ export const getStudentStats = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("[v0] Error fetching student stats:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching student stats",

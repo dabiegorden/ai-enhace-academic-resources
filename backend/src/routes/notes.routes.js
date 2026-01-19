@@ -6,25 +6,25 @@ import {
   updateLectureNote,
   deleteLectureNote,
   downloadLectureNote,
+  previewLectureNote,
   getMyLectureNotes,
   getMyUploadedNotes,
   getLectureNoteStats,
 } from "../controller/notes.controller.js";
-import { protect, authorize } from "../middleware/auth.middleware.js";
-import upload from "../middleware/upload.middleware.js";
+import { authorize, protect } from "../middleware/auth.middleware.js";
+import { uploadAssignments } from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
 // Public routes (protected by auth)
 router.get("/my-notes", protect, getMyLectureNotes);
-router.get(
-  "/uploaded-by-me",
-  protect,
-  authorize("lecturer", "admin"),
-  getMyUploadedNotes
-);
-router.get("/stats", protect, authorize("admin"), getLectureNoteStats);
+router.get("/uploaded-by-me", protect, getMyUploadedNotes);
+router.get("/stats", protect, getLectureNoteStats);
+
+// Download and preview routes (like timetable)
 router.get("/:id/download", protect, downloadLectureNote);
+router.get("/:id/preview", protect, previewLectureNote);
+
 router.get("/:id", protect, getLectureNoteById);
 router.get("/", protect, getAllLectureNotes);
 
@@ -33,15 +33,15 @@ router.post(
   "/",
   protect,
   authorize("lecturer", "admin"),
-  upload.single("file"),
-  uploadLectureNote
+  uploadAssignments.single("file"),
+  uploadLectureNote,
 );
 router.put("/:id", protect, authorize("lecturer", "admin"), updateLectureNote);
 router.delete(
   "/:id",
   protect,
   authorize("lecturer", "admin"),
-  deleteLectureNote
+  deleteLectureNote,
 );
 
 export default router;

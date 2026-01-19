@@ -117,7 +117,7 @@ const AdminLectureNotesPage = () => {
   const filterNotes = (
     notesList: LectureNote[],
     search: string,
-    faculty: string
+    faculty: string,
   ) => {
     let filtered = notesList;
 
@@ -127,7 +127,7 @@ const AdminLectureNotesPage = () => {
         (note) =>
           note.title.toLowerCase().includes(searchLower) ||
           note.course.toLowerCase().includes(searchLower) ||
-          note.courseCode.toLowerCase().includes(searchLower)
+          note.courseCode.toLowerCase().includes(searchLower),
       );
     }
 
@@ -176,7 +176,7 @@ const AdminLectureNotesPage = () => {
       }
 
       const updatedNotes = lectureNotes.filter(
-        (n) => n._id !== selectedNote._id
+        (n) => n._id !== selectedNote._id,
       );
       setLectureNotes(updatedNotes);
       filterNotes(updatedNotes, searchTerm, facultyFilter);

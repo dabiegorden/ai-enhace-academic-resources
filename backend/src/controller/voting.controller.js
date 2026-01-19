@@ -386,15 +386,39 @@ export const getAllVoting = async (req, res) => {
 
     const total = await Voting.countDocuments(query);
 
+    // Add hasVoted status for each voting event
+    const votingEventsWithStatus = votingEvents.map((voting) => {
+      const votingObj = voting.toObject();
+
+      // Check if current user has voted
+      const hasVoted = voting.voteRecords.some(
+        (record) => record.voter.toString() === req.user.id,
+      );
+
+      // Don't show vote counts if voting is still active and results not published
+      if (voting.isActive && !voting.resultsPublished) {
+        votingObj.candidates = votingObj.candidates.map((c) => ({
+          ...c,
+          votes: undefined,
+        }));
+      }
+
+      return {
+        ...votingObj,
+        hasVoted,
+      };
+    });
+
     res.status(200).json({
       success: true,
-      count: votingEvents.length,
+      count: votingEventsWithStatus.length,
       total,
       page: Number.parseInt(page),
       pages: Math.ceil(total / Number.parseInt(limit)),
-      data: votingEvents,
+      data: votingEventsWithStatus,
     });
   } catch (error) {
+    console.error("[v0] Get all voting error:", error);
     res.status(400).json({
       success: false,
       message: error.message,
@@ -471,14 +495,27 @@ export const castVote = async (req, res) => {
       });
     }
 
-    if (
-      voting.voteRecords.some(
-        (record) => record.voter.toString() === req.user.id,
-      )
-    ) {
+    // Find the candidate to get their position
+    const candidate = voting.candidates.id(candidateId);
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        message: "Candidate not found",
+      });
+    }
+
+    // Check if user has already voted for this position
+    const hasVotedForPosition = voting.voteRecords.some(
+      (record) =>
+        record.voter.toString() === req.user.id &&
+        record.position === candidate.position,
+    );
+
+    if (hasVotedForPosition) {
       return res.status(400).json({
         success: false,
-        message: "User has already voted",
+        message: `You have already voted for ${candidate.position}`,
       });
     }
 
@@ -491,16 +528,14 @@ export const castVote = async (req, res) => {
       });
     }
 
-    // Find candidate and increment votes
-    const candidate = voting.candidates.id(candidateId);
-
-    if (!candidate) {
-      return res.status(404).json({
+    if (!voting.isActive) {
+      return res.status(400).json({
         success: false,
-        message: "Candidate not found",
+        message: "Voting has been disabled",
       });
     }
 
+    // Increment votes
     candidate.votes += 1;
 
     // Record vote
@@ -518,6 +553,7 @@ export const castVote = async (req, res) => {
       message: "Vote cast successfully",
     });
   } catch (error) {
+    console.error("[v0] Cast vote error:", error);
     res.status(400).json({
       success: false,
       message: error.message,

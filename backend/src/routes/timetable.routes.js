@@ -24,24 +24,29 @@ router.get("/", protect, getAllTimetables);
 router.get("/:id", protect, getTimetableById);
 
 // Admin only routes
-router.post("/", protect, authorize("admin"), createTimetable);
-router.put("/:id", protect, authorize("admin"), updateTimetable);
-router.post("/:id/courses", protect, authorize("admin"), addCourseToSlot);
-router.delete("/:id", protect, authorize("admin"), deleteTimetable);
+router.post("/", protect, authorize("lecturer", "admin"), createTimetable);
+router.put("/:id", protect, authorize("lecturer", "admin"), updateTimetable);
+router.post(
+  "/:id/courses",
+  protect,
+  authorize("lecturer", "admin"),
+  addCourseToSlot,
+);
+router.delete("/:id", protect, authorize("lecturer", "admin"), deleteTimetable);
 
 router.post(
   "/:id/upload-document",
   protect,
-  authorize("admin"),
+  authorize("lecturer", "admin"),
   uploadDocuments.single("timetableDocument"),
-  uploadTimetableDocument
+  uploadTimetableDocument,
 );
 router.get("/:id/download-document", protect, downloadTimetableDocument);
 router.delete(
   "/:id/delete-document",
   protect,
-  authorize("admin"),
-  deleteTimetableDocument
+  authorize("lecturer", "admin"),
+  deleteTimetableDocument,
 );
 
 export default router;

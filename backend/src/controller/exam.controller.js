@@ -423,6 +423,58 @@ export const getMyExams = async (req, res) => {
   }
 };
 
+// Get my exams submissions (for students)
+export const getMyExamsSubmissions = async (req, res) => {
+  try {
+    // Get the logged-in student's ID from auth middleware
+    const studentId = req.user.id;
+
+    // Find all exams where this student has submitted
+    const exams = await Exam.find({
+      "submissions.studentId": studentId,
+    }).sort({ startedAt: -1 });
+
+    // Extract only this student's submissions with exam details
+    const mySubmissions = [];
+
+    exams.forEach((exam) => {
+      // Find the submission for this specific student
+      const studentSubmission = exam.submissions.find(
+        (sub) => sub.studentId.toString() === studentId,
+      );
+
+      if (studentSubmission) {
+        mySubmissions.push({
+          _id: studentSubmission._id,
+          examId: exam._id,
+          examTitle: exam.title,
+          studentId: studentSubmission.studentId,
+          answers: studentSubmission.answers,
+          totalScore: studentSubmission.totalScore,
+          submittedAt: studentSubmission.submittedAt,
+          autoGraded: studentSubmission.autoGraded,
+          exam: {
+            _id: exam._id,
+            title: exam.title,
+            totalPoints: exam.totalPoints,
+            questions: exam.questions,
+          },
+        });
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: mySubmissions,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // Get exam results
 export const getExamResults = async (req, res) => {
   try {
