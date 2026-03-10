@@ -52,7 +52,7 @@ export default function RegisterForm() {
   const router = useRouter();
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const value =
       e.target.name === "yearOfStudy"
@@ -154,7 +154,7 @@ export default function RegisterForm() {
                   name="firstName"
                   value={formData.firstName}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 rounded-xl border-2 ${
+                  className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
                     errors.firstName ? "border-red-500" : "border-gray-300"
                   } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
                   placeholder="John"
@@ -175,7 +175,7 @@ export default function RegisterForm() {
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 rounded-xl border-2 ${
+                  className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
                     errors.lastName ? "border-red-500" : "border-gray-300"
                   } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
                   placeholder="Doe"
@@ -198,7 +198,7 @@ export default function RegisterForm() {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-xl border-2 ${
+                className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
                   errors.email ? "border-red-500" : "border-gray-300"
                 } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
                 placeholder="student@cug.edu.gh"
@@ -220,7 +220,7 @@ export default function RegisterForm() {
                 name="studentId"
                 value={formData.studentId}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-xl border-2 ${
+                className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
                   errors.studentId ? "border-red-500" : "border-gray-300"
                 } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
                 placeholder="CUG123456"
@@ -242,7 +242,7 @@ export default function RegisterForm() {
                   name="faculty"
                   value={formData.faculty}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 rounded-xl border-2 ${
+                  className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
                     errors.faculty ? "border-red-500" : "border-gray-300"
                   } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white`}
                 >
@@ -268,7 +268,7 @@ export default function RegisterForm() {
                   name="yearOfStudy"
                   value={formData.yearOfStudy}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-900"
                 >
                   {[1, 2, 3, 4].map((year) => (
                     <option key={year} value={year}>
@@ -289,7 +289,7 @@ export default function RegisterForm() {
                 name="program"
                 value={formData.program}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-xl border-2 ${
+                className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
                   errors.program ? "border-red-500" : "border-gray-300"
                 } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
                 placeholder="e.g., Computer Science, Business Administration"
@@ -312,7 +312,7 @@ export default function RegisterForm() {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 rounded-xl border-2 ${
+                  className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
                     errors.password ? "border-red-500" : "border-gray-300"
                   } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
                   placeholder="Min. 6 characters"
@@ -333,7 +333,7 @@ export default function RegisterForm() {
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 rounded-xl border-2 ${
+                  className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
                     errors.confirmPassword
                       ? "border-red-500"
                       : "border-gray-300"
