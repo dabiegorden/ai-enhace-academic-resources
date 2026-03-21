@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Vote,
   Users,
@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Calendar,
   Award,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -31,6 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Candidate {
   _id: string;
@@ -39,6 +41,7 @@ interface Candidate {
   position: string;
   manifesto: string;
   imageUrl?: string;
+  manifestoFileUrl?: string | null;
   votes?: number;
 }
 
@@ -78,25 +81,20 @@ export default function StudentVotingPage() {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  // Fetch voting events
   const fetchVotingEvents = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`${apiUrl}/voting?status=${activeTab}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await response.json();
       if (data.success) {
         setVotingEvents(data.data || []);
       } else {
         toast.error(data.message || "Failed to fetch voting events");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch voting events");
-      console.error("Fetch error:", error);
     } finally {
       setLoading(false);
     }
@@ -106,15 +104,11 @@ export default function StudentVotingPage() {
     fetchVotingEvents();
   }, [fetchVotingEvents]);
 
-  // Fetch detailed voting event
   const fetchVotingDetails = async (votingId: string) => {
     try {
       const response = await fetch(`${apiUrl}/voting/${votingId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await response.json();
       if (data.success) {
         setSelectedVoting(data.data);
@@ -122,13 +116,11 @@ export default function StudentVotingPage() {
       } else {
         toast.error(data.message || "Failed to fetch voting details");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch voting details");
-      console.error("Fetch error:", error);
     }
   };
 
-  // Open vote dialog for a position
   const openVoteDialog = (voting: VotingEvent, position: string) => {
     setSelectedVoting(voting);
     setSelectedPosition(position);
@@ -136,13 +128,11 @@ export default function StudentVotingPage() {
     setVoteDialogOpen(true);
   };
 
-  // Submit vote
   const handleVote = async () => {
     if (!selectedCandidate || !selectedVoting) {
       toast.error("Please select a candidate");
       return;
     }
-
     try {
       setSubmitting(true);
       const response = await fetch(
@@ -156,30 +146,25 @@ export default function StudentVotingPage() {
           body: JSON.stringify({ candidateId: selectedCandidate }),
         },
       );
-
       const data = await response.json();
       if (data.success) {
         toast.success("Vote cast successfully!");
         setVoteDialogOpen(false);
-        fetchVotingEvents(); // Refresh to update hasVoted status
+        fetchVotingEvents();
       } else {
         toast.error(data.message || "Failed to cast vote");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to cast vote");
-      console.error("Vote error:", error);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Get voting status - prioritize isActive flag from backend
   const getVotingStatus = (voting: VotingEvent) => {
     const now = new Date();
     const start = new Date(voting.startDate);
     const end = new Date(voting.endDate);
-
-    // If backend marks it as active, trust that
     if (voting.isActive && now >= start && now <= end) {
       return { label: "Active", color: "bg-green-100 text-green-700" };
     }
@@ -190,38 +175,31 @@ export default function StudentVotingPage() {
     return { label: "Active", color: "bg-green-100 text-green-700" };
   };
 
-  // Group candidates by position
   const groupCandidatesByPosition = (candidates: Candidate[]) => {
     const grouped: Record<string, Candidate[]> = {};
     candidates.forEach((candidate) => {
-      if (!grouped[candidate.position]) {
-        grouped[candidate.position] = [];
-      }
+      if (!grouped[candidate.position]) grouped[candidate.position] = [];
       grouped[candidate.position].push(candidate);
     });
     return grouped;
   };
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
 
-  // Get initials from name
-  const getInitials = (name: string) => {
-    return name
+  const getInitials = (name: string) =>
+    name
       .split(" ")
       .map((n) => n[0])
       .join("")
       .toUpperCase()
       .slice(0, 2);
-  };
 
   return (
     <div className="min-h-screen bg-gray-900 p-6">
@@ -239,6 +217,7 @@ export default function StudentVotingPage() {
         <Badge variant="outline" className="text-lg px-4 py-2">
           {votingEvents.length} Event{votingEvents.length !== 1 ? "s" : ""}
         </Badge>
+
         {/* Tabs */}
         <Tabs
           value={activeTab}
@@ -260,7 +239,7 @@ export default function StudentVotingPage() {
           </TabsList>
         </Tabs>
 
-        {/* Loading State */}
+        {/* Content */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600" />
@@ -312,12 +291,12 @@ export default function StudentVotingPage() {
                         <span className="font-semibold">Voting Period</span>
                       </div>
                       <p className="text-xs text-purple-400">
-                        {formatDate(voting.startDate)} -{" "}
+                        {formatDate(voting.startDate)} —{" "}
                         {formatDate(voting.endDate)}
                       </p>
                     </div>
 
-                    {/* Positions & Candidates */}
+                    {/* Positions */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm font-semibold text-gray-300">
                         <Users className="size-4" />
@@ -325,7 +304,7 @@ export default function StudentVotingPage() {
                       </div>
                       <div className="space-y-1">
                         {Object.entries(candidatesByPosition).map(
-                          ([position, candidates]) => (
+                          ([position, cands]) => (
                             <div
                               key={position}
                               className="flex items-center justify-between text-xs bg-gray-700 rounded p-2"
@@ -337,8 +316,8 @@ export default function StudentVotingPage() {
                                 variant="secondary"
                                 className="text-xs bg-gray-600 text-gray-200"
                               >
-                                {candidates.length} candidate
-                                {candidates.length !== 1 ? "s" : ""}
+                                {cands.length} candidate
+                                {cands.length !== 1 ? "s" : ""}
                               </Badge>
                             </div>
                           ),
@@ -346,7 +325,7 @@ export default function StudentVotingPage() {
                       </div>
                     </div>
 
-                    {/* Voting Status */}
+                    {/* Vote status banner */}
                     {voting.hasVoted ? (
                       <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 flex items-center gap-2">
                         <CheckCircle className="size-5 text-green-400" />
@@ -416,60 +395,74 @@ export default function StudentVotingPage() {
             <DialogDescription>{selectedVoting?.description}</DialogDescription>
           </DialogHeader>
           {selectedVoting && (
-            <div className="space-y-6">
-              {Object.entries(
-                groupCandidatesByPosition(selectedVoting.candidates),
-              ).map(([position, candidates]) => (
-                <div key={position} className="space-y-3">
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <Award className="size-5 text-purple-600" />
-                    {position}
-                  </h3>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {candidates.map((candidate) => (
-                      <Card key={candidate._id} className="overflow-hidden">
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-4">
-                            <Avatar className="size-16">
-                              <AvatarImage
-                                src={candidate.imageUrl || "/placeholder.svg"}
-                                alt={candidate.name}
-                              />
-                              <AvatarFallback className="bg-purple-100 text-purple-700 text-lg font-bold">
-                                {getInitials(candidate.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-gray-900">
-                                {candidate.name}
-                              </h4>
-                              <p className="text-sm text-gray-600">
-                                {candidate.studentId}
-                              </p>
-                              {candidate.manifesto && (
-                                <p className="text-xs text-gray-700 mt-2 line-clamp-3">
-                                  {candidate.manifesto}
+            <ScrollArea className="max-h-[65vh] pr-2">
+              <div className="space-y-6">
+                {Object.entries(
+                  groupCandidatesByPosition(selectedVoting.candidates),
+                ).map(([position, candidates]) => (
+                  <div key={position} className="space-y-3">
+                    <h3 className="text-lg font-bold text-gray-100 flex items-center gap-2">
+                      <Award className="size-5 text-purple-600" />
+                      {position}
+                    </h3>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {candidates.map((candidate) => (
+                        <Card key={candidate._id} className="overflow-hidden">
+                          <CardContent className="p-4">
+                            <div className="flex items-start gap-4">
+                              <Avatar className="size-16">
+                                <AvatarImage
+                                  src={candidate.imageUrl || "/placeholder.svg"}
+                                  alt={candidate.name}
+                                />
+                                <AvatarFallback className="bg-purple-100 text-purple-700 text-lg font-bold">
+                                  {getInitials(candidate.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-gray-100">
+                                  {candidate.name}
+                                </h4>
+                                <p className="text-sm text-gray-100">
+                                  {candidate.studentId}
                                 </p>
-                              )}
-                              {selectedVoting.resultsPublished &&
-                                candidate.votes !== undefined && (
-                                  <div className="mt-2 flex items-center gap-2">
-                                    <Trophy className="size-4 text-yellow-600" />
-                                    <span className="text-sm font-bold text-gray-900">
-                                      {candidate.votes} vote
-                                      {candidate.votes !== 1 ? "s" : ""}
-                                    </span>
-                                  </div>
+                                {candidate.manifesto && (
+                                  <p className="text-xs text-gray-100 mt-2 line-clamp-3">
+                                    {candidate.manifesto}
+                                  </p>
                                 )}
+                                {/* Manifesto file link */}
+                                {candidate.manifestoFileUrl && (
+                                  <a
+                                    href={candidate.manifestoFileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 mt-2 text-xs text-blue-600 hover:text-blue-500 font-medium"
+                                  >
+                                    <FileText className="size-3" />
+                                    View Manifesto
+                                  </a>
+                                )}
+                                {selectedVoting.resultsPublished &&
+                                  candidate.votes !== undefined && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                      <Trophy className="size-4 text-yellow-600" />
+                                      <span className="text-sm font-bold text-gray-100">
+                                        {candidate.votes} vote
+                                        {candidate.votes !== 1 ? "s" : ""}
+                                      </span>
+                                    </div>
+                                  )}
+                              </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </ScrollArea>
           )}
           <DialogFooter>
             <Button
@@ -486,7 +479,7 @@ export default function StudentVotingPage() {
       <Dialog open={voteDialogOpen} onOpenChange={setVoteDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Cast Your Vote - {selectedPosition}</DialogTitle>
+            <DialogTitle>Cast Your Vote — {selectedPosition}</DialogTitle>
             <DialogDescription>
               Select a candidate to vote for. You can only vote once per
               position.
@@ -533,6 +526,18 @@ export default function StudentVotingPage() {
                             <p className="text-sm text-gray-700 mt-2">
                               {candidate.manifesto}
                             </p>
+                          )}
+                          {candidate.manifestoFileUrl && (
+                            <a
+                              href={candidate.manifestoFileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 mt-2 text-xs text-blue-600 hover:text-blue-500 font-medium"
+                            >
+                              <FileText className="size-3" />
+                              View Manifesto File
+                            </a>
                           )}
                         </div>
                       </div>

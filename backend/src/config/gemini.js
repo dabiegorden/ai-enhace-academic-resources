@@ -5,7 +5,7 @@ import { ENV } from "./env.js";
 const genAI = new GoogleGenerativeAI(ENV.GEMINI_API_KEY);
 
 // Get AI model instance for generating content
-export const getGeminiModel = (modelName = "gemini-2.0-flash-exp") => {
+export const getGeminiModel = (modelName = "gemini-3-flash-preview") => {
   return genAI.getGenerativeModel({ model: modelName });
 };
 

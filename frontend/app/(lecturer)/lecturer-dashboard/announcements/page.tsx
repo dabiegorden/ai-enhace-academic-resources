@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,8 +17,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Eye, Edit, Trash2, Plus, Clock, Pin } from "lucide-react";
+import {
+  Eye,
+  Edit,
+  Trash2,
+  Plus,
+  Clock,
+  Pin,
+  Paperclip,
+  X,
+  FileText,
+  Image as ImageIcon,
+  Download,
+} from "lucide-react";
 import { toast } from "sonner";
+
+interface Attachment {
+  url: string;
+  cloudinaryId?: string;
+  originalName?: string;
+  mimeType?: string;
+}
 
 interface Announcement {
   _id: string;
@@ -30,7 +49,7 @@ interface Announcement {
   views: number;
   isPinned: boolean;
   expiryDate?: string;
-  attachments?: Array<{ url: string; cloudinaryId?: string }>;
+  attachments?: Attachment[];
   createdAt: string;
 }
 
@@ -51,6 +70,15 @@ const ANNOUNCEMENT_TYPES = [
   { value: "event", label: "Event" },
   { value: "urgent", label: "Urgent" },
 ];
+
+const isImage = (mimeType?: string) => mimeType?.startsWith("image/");
+
+const AttachmentIcon = ({ mimeType }: { mimeType?: string }) =>
+  isImage(mimeType) ? (
+    <ImageIcon className="size-4 text-blue-400 shrink-0" />
+  ) : (
+    <FileText className="size-4 text-blue-400 shrink-0" />
+  );
 
 const LecturerAnnouncementPage = () => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -76,6 +104,8 @@ const LecturerAnnouncementPage = () => {
     faculty: "",
     expiryDate: "",
   });
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -92,9 +122,7 @@ const LecturerAnnouncementPage = () => {
           Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
       });
-
       if (!response.ok) throw new Error("Failed to fetch announcements");
-
       const data = await response.json();
       setAnnouncements(data.data || []);
       filterAnnouncements(
@@ -118,7 +146,6 @@ const LecturerAnnouncementPage = () => {
     faculty: string,
   ) => {
     let filtered = list;
-
     if (search) {
       filtered = filtered.filter(
         (a) =>
@@ -126,11 +153,9 @@ const LecturerAnnouncementPage = () => {
           a.content.toLowerCase().includes(search.toLowerCase()),
       );
     }
-
     if (type !== "all") filtered = filtered.filter((a) => a.type === type);
     if (faculty !== "all")
       filtered = filtered.filter((a) => a.faculty === faculty);
-
     setFilteredAnnouncements(filtered);
   };
 
@@ -145,62 +170,60 @@ const LecturerAnnouncementPage = () => {
       toast.error("Title is required");
       return false;
     }
-
     if (!formData.content.trim()) {
       toast.error("Content is required");
       return false;
     }
-
     if (!formData.type) {
       toast.error("Announcement type is required");
       return false;
     }
-
     if (formData.type === "faculty" && !formData.faculty) {
       toast.error("Faculty is required for faculty-type announcements");
       return false;
     }
-
     return true;
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (selectedFiles.length + files.length > 5) {
+      toast.error("Maximum 5 files allowed");
+      return;
+    }
+    setSelectedFiles((prev) => [...prev, ...files]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleAddAnnouncement = async () => {
     if (!validateFormData()) return;
-
     try {
       setActionLoading(true);
 
-      // Build payload based on announcement type
-      const payload: any = {
-        title: formData.title.trim(),
-        content: formData.content.trim(),
-        type: formData.type,
-      };
-
-      // Only add faculty if type is "faculty"
-      if (formData.type === "faculty") {
-        payload.faculty = formData.faculty;
-      }
-
-      // Add expiry date if provided
-      if (formData.expiryDate) {
-        payload.expiryDate = formData.expiryDate;
-      }
+      const form = new FormData();
+      form.append("title", formData.title.trim());
+      form.append("content", formData.content.trim());
+      form.append("type", formData.type);
+      if (formData.type === "faculty") form.append("faculty", formData.faculty);
+      if (formData.expiryDate) form.append("expiryDate", formData.expiryDate);
+      selectedFiles.forEach((file) => form.append("files", file));
 
       const response = await fetch(`${apiUrl}/announcements`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+          // No Content-Type header — browser adds multipart boundary automatically
         },
-        body: JSON.stringify(payload),
+        body: form,
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error(data.message || "Failed to create announcement");
-      }
 
       setAnnouncements([data.data, ...announcements]);
       filterAnnouncements(
@@ -214,7 +237,6 @@ const LecturerAnnouncementPage = () => {
       toast.success("Announcement created successfully");
     } catch (error: any) {
       toast.error(error.message || "Failed to create announcement");
-      console.error(error);
     } finally {
       setActionLoading(false);
     }
@@ -222,28 +244,21 @@ const LecturerAnnouncementPage = () => {
 
   const handleSaveAnnouncement = async () => {
     if (!selectedAnnouncement) return;
-
     if (!formData.title.trim()) {
       toast.error("Title is required");
       return;
     }
-
     if (!formData.content.trim()) {
       toast.error("Content is required");
       return;
     }
-
     try {
       setActionLoading(true);
-
       const payload: any = {
         title: formData.title.trim(),
         content: formData.content.trim(),
       };
-
-      if (formData.expiryDate) {
-        payload.expiryDate = formData.expiryDate;
-      }
+      if (formData.expiryDate) payload.expiryDate = formData.expiryDate;
 
       const response = await fetch(
         `${apiUrl}/announcements/${selectedAnnouncement._id}`,
@@ -256,12 +271,9 @@ const LecturerAnnouncementPage = () => {
           body: JSON.stringify(payload),
         },
       );
-
       const data = await response.json();
-
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error(data.message || "Failed to update announcement");
-      }
 
       const updated = announcements.map((a) =>
         a._id === selectedAnnouncement._id ? data.data : a,
@@ -273,7 +285,6 @@ const LecturerAnnouncementPage = () => {
       toast.success("Announcement updated successfully");
     } catch (error: any) {
       toast.error(error.message || "Failed to update announcement");
-      console.error(error);
     } finally {
       setActionLoading(false);
     }
@@ -289,18 +300,12 @@ const LecturerAnnouncementPage = () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
           },
-          body: JSON.stringify({
-            isPinned: !announcement.isPinned,
-          }),
+          body: JSON.stringify({ isPinned: !announcement.isPinned }),
         },
       );
-
       const data = await response.json();
-
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error(data.message || "Failed to update announcement");
-      }
-
       const updated = announcements.map((a) =>
         a._id === announcement._id ? { ...a, isPinned: !a.isPinned } : a,
       );
@@ -316,7 +321,6 @@ const LecturerAnnouncementPage = () => {
 
   const handleConfirmDelete = async () => {
     if (!selectedAnnouncement) return;
-
     try {
       setActionLoading(true);
       const response = await fetch(
@@ -328,13 +332,9 @@ const LecturerAnnouncementPage = () => {
           },
         },
       );
-
       const data = await response.json();
-
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error(data.message || "Failed to delete announcement");
-      }
-
       const updated = announcements.filter(
         (a) => a._id !== selectedAnnouncement._id,
       );
@@ -345,7 +345,6 @@ const LecturerAnnouncementPage = () => {
       toast.success("Announcement deleted successfully");
     } catch (error: any) {
       toast.error(error.message || "Failed to delete announcement");
-      console.error(error);
     } finally {
       setActionLoading(false);
     }
@@ -359,6 +358,8 @@ const LecturerAnnouncementPage = () => {
       faculty: "",
       expiryDate: "",
     });
+    setSelectedFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleTypeChange = (value: string) => {
@@ -484,17 +485,22 @@ const LecturerAnnouncementPage = () => {
                     </h3>
                     {announcement.isPinned && (
                       <span className="flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-1 text-xs font-medium text-red-400">
-                        <Pin className="h-3 w-3" />
-                        Pinned
+                        <Pin className="h-3 w-3" /> Pinned
                       </span>
                     )}
                     <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${getTypeColor(
-                        announcement.type,
-                      )}`}
+                      className={`rounded-full px-2 py-1 text-xs font-medium ${getTypeColor(announcement.type)}`}
                     >
                       {announcement.type}
                     </span>
+                    {announcement.attachments &&
+                      announcement.attachments.length > 0 && (
+                        <span className="flex items-center gap-1 rounded-full bg-gray-600/40 px-2 py-1 text-xs font-medium text-gray-300">
+                          <Paperclip className="h-3 w-3" />
+                          {announcement.attachments.length} file
+                          {announcement.attachments.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
                   </div>
                   <p className="mt-1 text-sm text-gray-400">
                     {announcement.content.length > 100
@@ -529,9 +535,7 @@ const LecturerAnnouncementPage = () => {
                     title={announcement.isPinned ? "Unpin" : "Pin"}
                   >
                     <Pin
-                      className={`h-4 w-4 ${
-                        announcement.isPinned ? "text-red-400" : ""
-                      }`}
+                      className={`h-4 w-4 ${announcement.isPinned ? "text-red-400" : ""}`}
                     />
                   </Button>
                   <Button
@@ -632,6 +636,39 @@ const LecturerAnnouncementPage = () => {
                   </p>
                 </div>
               )}
+              {selectedAnnouncement.attachments &&
+                selectedAnnouncement.attachments.length > 0 && (
+                  <div>
+                    <p className="text-sm text-gray-400 mb-2">Attachments</p>
+                    <div className="space-y-2">
+                      {selectedAnnouncement.attachments.map((att, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between bg-gray-800 rounded-lg p-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <AttachmentIcon mimeType={att.mimeType} />
+                            <span className="text-sm text-gray-300">
+                              {att.originalName || `Attachment ${idx + 1}`}
+                            </span>
+                          </div>
+                          <a
+                            href={att.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Button
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              <Download className="size-3 mr-1" /> Open
+                            </Button>
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
             </div>
           )}
         </DialogContent>
@@ -658,7 +695,7 @@ const LecturerAnnouncementPage = () => {
               onChange={(e) =>
                 setFormData({ ...formData, content: e.target.value })
               }
-              className="min-h-32 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white"
+              className="min-h-32 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500"
             />
             <Select value={formData.type} onValueChange={handleTypeChange}>
               <SelectTrigger className="border-gray-700 bg-gray-800">
@@ -704,6 +741,60 @@ const LecturerAnnouncementPage = () => {
                 className="border-gray-700 bg-gray-800 mt-1"
               />
             </div>
+
+            {/* File attachment section */}
+            <div>
+              <label className="text-sm text-gray-400">
+                Attachments — images or PDFs (optional, max 5)
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:border-gray-400 transition-colors">
+                  <Paperclip className="h-4 w-4" />
+                  Choose files
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.pdf,.doc,.docx"
+                    multiple
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+                <span className="text-xs text-gray-500">
+                  {selectedFiles.length}/5 selected
+                </span>
+              </div>
+              {selectedFiles.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {selectedFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between rounded bg-gray-800 px-3 py-1.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        {file.type.startsWith("image/") ? (
+                          <ImageIcon className="h-4 w-4 text-blue-400 shrink-0" />
+                        ) : (
+                          <FileText className="h-4 w-4 text-blue-400 shrink-0" />
+                        )}
+                        <span className="text-xs text-gray-300 truncate max-w-50">
+                          {file.name}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ({(file.size / 1024).toFixed(0)} KB)
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => removeFile(idx)}
+                        className="text-gray-500 hover:text-red-400 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -748,7 +839,7 @@ const LecturerAnnouncementPage = () => {
               onChange={(e) =>
                 setFormData({ ...formData, content: e.target.value })
               }
-              className="min-h-32 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white"
+              className="min-h-32 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500"
             />
             <div>
               <label className="text-sm text-gray-400">
@@ -764,7 +855,8 @@ const LecturerAnnouncementPage = () => {
               />
             </div>
             <p className="text-xs text-gray-500">
-              Note: Type and faculty cannot be changed after creation
+              Note: Type, faculty, and attachments cannot be changed after
+              creation
             </p>
           </div>
           <DialogFooter>

@@ -10,6 +10,8 @@ import {
   Vote,
   Bell,
   LayoutGrid,
+  StarIcon,
+  Stars,
 } from "lucide-react";
 
 import { AdminSidebar } from "@/components/AdminSidebar";
@@ -155,6 +157,11 @@ export const lecturerSidebarItems = [
         url: "/lecturer-dashboard/announcements",
         icon: Bell,
       },
+      {
+        title: "Ratings",
+        url: "/lecturer-dashboard/ratings",
+        icon: StarIcon,
+      },
     ],
   },
 ];
@@ -192,6 +199,11 @@ export const studentSidebaritems = [
         title: "Voting System",
         url: "/student-dashboard/voting",
         icon: Vote,
+      },
+      {
+        title: "Ratings",
+        url: "/student-dashboard/ratings",
+        icon: Stars,
       },
     ],
   },

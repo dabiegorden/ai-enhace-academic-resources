@@ -914,7 +914,7 @@ export default function AdminExaminationsPage() {
                           key={key}
                           className={`flex items-center gap-2 rounded-md border p-2 ${
                             question.correctAnswer === key
-                              ? "border-green-500 bg-green-50"
+                              ? "border-green-500"
                               : ""
                           }`}
                         >
@@ -1036,10 +1036,10 @@ export default function AdminExaminationsPage() {
                                 key={ans.questionNumber}
                                 className={`rounded-lg border p-3 ${
                                   ans.isCorrect === true
-                                    ? "border-green-300 bg-green-50"
+                                    ? "border-green-400 bg-green-100"
                                     : ans.isCorrect === false
-                                      ? "border-red-300 bg-red-50"
-                                      : "border-gray-300 bg-gray-50"
+                                      ? "border-red-400 bg-red-100"
+                                      : "border-gray-300 bg-gray-100"
                                 }`}
                               >
                                 <div className="flex items-start justify-between mb-2">
@@ -1054,15 +1054,15 @@ export default function AdminExaminationsPage() {
                                     </Badge>
                                   </div>
                                   <div className="text-right">
-                                    <span className="font-semibold text-sm">
+                                    <span className="font-semibold text-sm text-gray-900">
                                       {ans.pointsAwarded} /{" "}
                                       {question?.points || 0} pts
                                     </span>
                                     {ans.isCorrect === true && (
-                                      <CheckCircle2 className="inline ml-2 size-4 text-green-600" />
+                                      <CheckCircle2 className="inline ml-2 size-4 text-green-700" />
                                     )}
                                     {ans.isCorrect === false && (
-                                      <span className="inline ml-2 text-red-600">
+                                      <span className="inline ml-2 text-red-700 font-bold">
                                         ✗
                                       </span>
                                     )}
@@ -1084,21 +1084,21 @@ export default function AdminExaminationsPage() {
                                       {ans.answer}
                                       {question.options &&
                                         question.options[ans.answer] && (
-                                          <span className="text-gray-700">
+                                          <span className="text-gray-800">
                                             {" "}
                                             - {question.options[ans.answer]}
                                           </span>
                                         )}
                                     </span>
                                   ) : (
-                                    <span className="block mt-1 p-2 bg-white rounded border text-gray-900">
+                                    <span className="block mt-1 p-2 bg-white rounded border border-gray-300 text-gray-900">
                                       {ans.answer}
                                     </span>
                                   )}
                                 </p>
                                 {question?.questionType === "mcq" &&
                                   question.correctAnswer && (
-                                    <p className="text-sm mt-2 text-green-700">
+                                    <p className="text-sm mt-2 text-green-800 font-medium">
                                       <strong>Correct Answer:</strong>{" "}
                                       {question.correctAnswer}
                                       {question.options &&

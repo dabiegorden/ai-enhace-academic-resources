@@ -31,6 +31,10 @@ const announcementSchema = new mongoose.Schema(
       {
         url: String,
         cloudinaryId: String,
+        // Store original filename and mime type so the frontend
+        // can display a meaningful label and icon for each attachment
+        originalName: String,
+        mimeType: String,
       },
     ],
     isPinned: {
@@ -47,7 +51,7 @@ const announcementSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export default mongoose.models.Announcement ||

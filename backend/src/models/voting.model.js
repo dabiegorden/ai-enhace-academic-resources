@@ -16,6 +16,11 @@ const candidateSchema = new mongoose.Schema({
   manifesto: {
     type: String,
   },
+  // URL for uploaded manifesto file (PDF or image)
+  manifestoFileUrl: {
+    type: String,
+    default: null,
+  },
   imageUrl: {
     type: String,
   },
@@ -104,7 +109,7 @@ const votingSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Ensure one vote per user per voting

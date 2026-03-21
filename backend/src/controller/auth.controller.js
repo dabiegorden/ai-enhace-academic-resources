@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
-import User from "../models/user.model.js";
+import User from "../models/User.model.js";
 
 // @desc    Register new user
 // @route   POST /api/auth/register
@@ -128,7 +128,7 @@ export const login = async (req, res) => {
 
     // Check for user (including password field)
     const user = await User.findOne({ email: normalizedEmail }).select(
-      "+password"
+      "+password",
     );
 
     if (!user) {

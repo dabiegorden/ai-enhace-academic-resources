@@ -1,6 +1,7 @@
 import Announcement from "../models/announcement.model.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
+import { broadcastToRoles } from "../controller/notification.controller.js";
 
 // @desc    Create announcement
 // @route   POST /api/announcements
@@ -16,7 +17,6 @@ export const createAnnouncement = async (req, res) => {
       });
     }
 
-    // Validate faculty for faculty-type announcements
     if (type === "faculty" && !faculty) {
       return res.status(400).json({
         success: false,
@@ -24,7 +24,8 @@ export const createAnnouncement = async (req, res) => {
       });
     }
 
-    // Handle file attachments
+    // Upload attachments to Cloudinary
+    // resource_type "auto" lets Cloudinary handle images, PDFs, docs, etc.
     const attachments = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
@@ -32,12 +33,12 @@ export const createAnnouncement = async (req, res) => {
           const uploadStream = cloudinary.uploader.upload_stream(
             {
               folder: "cug-announcements",
-              resource_type: "auto",
+              resource_type: "auto", // handles images AND PDFs/docs
             },
             (error, result) => {
               if (error) reject(error);
               else resolve(result);
-            }
+            },
           );
           streamifier.createReadStream(file.buffer).pipe(uploadStream);
         });
@@ -45,6 +46,9 @@ export const createAnnouncement = async (req, res) => {
         attachments.push({
           url: result.secure_url,
           cloudinaryId: result.public_id,
+          // Store original filename so the frontend can show a meaningful label
+          originalName: file.originalname,
+          mimeType: file.mimetype,
         });
       }
     }
@@ -61,16 +65,30 @@ export const createAnnouncement = async (req, res) => {
 
     await announcement.populate("author", "firstName lastName email role");
 
+    // Notify ALL roles whenever anyone creates an announcement
+    const io = req.app.get("io");
+    const authorName =
+      `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() ||
+      "Administration";
+
+    await broadcastToRoles({
+      roles: ["student", "lecturer", "admin"],
+      type: "announcement",
+      title: `📢 New Announcement: ${title}`,
+      message: `${authorName} posted: ${content.slice(0, 100)}${content.length > 100 ? "…" : ""}`,
+      relatedId: announcement._id,
+      relatedModel: "Announcement",
+      metadata: { announcementType: type, faculty: faculty || null },
+      io,
+    });
+
     res.status(201).json({
       success: true,
       message: "Announcement created successfully",
       data: announcement,
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -82,11 +100,7 @@ export const getAllAnnouncements = async (req, res) => {
     const { type, faculty, page = 1, limit = 20 } = req.query;
 
     const query = {};
-
-    // Filter by type
     if (type) query.type = type;
-
-    // Filter by faculty
     if (faculty) query.faculty = faculty;
 
     // Only show non-expired announcements
@@ -111,10 +125,7 @@ export const getAllAnnouncements = async (req, res) => {
       data: announcements,
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -125,7 +136,7 @@ export const getAnnouncementById = async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id).populate(
       "author",
-      "firstName lastName email role"
+      "firstName lastName email role",
     );
 
     if (!announcement) {
@@ -135,19 +146,12 @@ export const getAnnouncementById = async (req, res) => {
       });
     }
 
-    // Increment views
     announcement.views += 1;
     await announcement.save();
 
-    res.status(200).json({
-      success: true,
-      data: announcement,
-    });
+    res.status(200).json({ success: true, data: announcement });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -165,7 +169,6 @@ export const updateAnnouncement = async (req, res) => {
       });
     }
 
-    // Check authorization
     if (
       announcement.author.toString() !== req.user.id &&
       req.user.role !== "admin"
@@ -191,10 +194,7 @@ export const updateAnnouncement = async (req, res) => {
       data: announcement,
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -212,7 +212,6 @@ export const deleteAnnouncement = async (req, res) => {
       });
     }
 
-    // Check authorization
     if (
       announcement.author.toString() !== req.user.id &&
       req.user.role !== "admin"
@@ -223,10 +222,12 @@ export const deleteAnnouncement = async (req, res) => {
       });
     }
 
-    // Delete attachments from Cloudinary
+    // Delete all attachments from Cloudinary
     for (const attachment of announcement.attachments) {
       if (attachment.cloudinaryId) {
-        await cloudinary.uploader.destroy(attachment.cloudinaryId);
+        await cloudinary.uploader.destroy(attachment.cloudinaryId, {
+          resource_type: "auto",
+        });
       }
     }
 
@@ -237,9 +238,6 @@ export const deleteAnnouncement = async (req, res) => {
       message: "Announcement deleted successfully",
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };

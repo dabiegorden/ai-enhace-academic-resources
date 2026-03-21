@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,7 +18,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Edit2, Trash2, Clock } from "lucide-react";
+import { Plus, Edit2, Trash2, Clock, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 interface Candidate {
@@ -28,7 +28,9 @@ interface Candidate {
   position: string;
   manifesto: string;
   imageUrl: string | null;
+  manifestoFileUrl?: string | null;
   image?: File;
+  manifestoFile?: File;
   votes: number;
 }
 
@@ -60,6 +62,16 @@ interface FormData {
   endTime: string;
 }
 
+// Default positions including "Weekend Rep"
+const DEFAULT_POSITIONS = [
+  "PRESIDENT",
+  "VICE-PRESIDENT",
+  "SECRETARY",
+  "TREASURER",
+  "WELFARE OFFICER",
+  "WEEKEND REP",
+];
+
 export default function VotingAdmin() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -82,7 +94,7 @@ export default function VotingAdmin() {
     description: "",
     type: "src",
     faculty: "",
-    positions: "",
+    positions: DEFAULT_POSITIONS.join(", "),
     startDate: "",
     endDate: "",
     startTime: "09:00",
@@ -96,9 +108,13 @@ export default function VotingAdmin() {
     position: "",
     manifesto: "",
     imageUrl: null,
+    manifestoFileUrl: null,
     image: undefined,
+    manifestoFile: undefined,
     votes: 0,
   });
+
+  const manifestoFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchVotings();
@@ -112,32 +128,24 @@ export default function VotingAdmin() {
           Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
       });
-
       if (!response.ok) throw new Error("Failed to fetch votings");
-
       const data = await response.json();
       setVotings(data.data);
       filterVotings(data.data, searchTerm, typeFilter);
-    } catch (error) {
-      toast.error("Fail to fetch votings");
+    } catch {
+      toast.error("Failed to fetch votings");
     } finally {
       setLoading(false);
     }
   };
 
-  const filterVotings = (votings: Voting[], search: string, type: string) => {
-    let filtered = votings;
-
-    if (search) {
+  const filterVotings = (list: Voting[], search: string, type: string) => {
+    let filtered = list;
+    if (search)
       filtered = filtered.filter((v) =>
         v.title.toLowerCase().includes(search.toLowerCase()),
       );
-    }
-
-    if (type !== "all") {
-      filtered = filtered.filter((v) => v.type === type);
-    }
-
+    if (type !== "all") filtered = filtered.filter((v) => v.type === type);
     setFilteredVotings(filtered);
   };
 
@@ -147,24 +155,37 @@ export default function VotingAdmin() {
     filterVotings(votings, value, typeFilter);
   };
 
+  const resetCandidate = () => {
+    setCurrentCandidate({
+      name: "",
+      studentId: "",
+      position: "",
+      manifesto: "",
+      imageUrl: null,
+      manifestoFileUrl: null,
+      image: undefined,
+      manifestoFile: undefined,
+      votes: 0,
+    });
+    if (manifestoFileRef.current) manifestoFileRef.current.value = "";
+  };
+
   const handleAddCandidate = () => {
     if (
       !currentCandidate.name ||
       !currentCandidate.studentId ||
       !currentCandidate.position
     ) {
-      toast.error("Please fill in all candidate fields");
+      toast.error("Please fill in name, student ID and position");
       return;
     }
-
     const exists = candidates.some(
       (c) => c.studentId === currentCandidate.studentId,
     );
     if (exists && !currentCandidate._id) {
-      toast.error("Candidate already added");
+      toast.error("Candidate with this student ID already added");
       return;
     }
-
     if (currentCandidate._id) {
       setCandidates(
         candidates.map((c) =>
@@ -174,16 +195,7 @@ export default function VotingAdmin() {
     } else {
       setCandidates([...candidates, currentCandidate]);
     }
-
-    setCurrentCandidate({
-      name: "",
-      studentId: "",
-      position: "",
-      manifesto: "",
-      imageUrl: null,
-      image: undefined,
-      votes: 0,
-    });
+    resetCandidate();
   };
 
   const handleRemoveCandidate = (studentId: string) => {
@@ -201,19 +213,73 @@ export default function VotingAdmin() {
     }
   };
 
+  const handleManifestoFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCurrentCandidate({
+        ...currentCandidate,
+        manifestoFile: file,
+        manifestoFileUrl: URL.createObjectURL(file),
+      });
+    }
+  };
+
   const combineDateTime = (date: string, time: string): string => {
     if (!date || !time) return "";
     const [year, month, day] = date.split("-").map(Number);
     const [hours, minutes] = time.split(":").map(Number);
-    const dateObj = new Date(year, month - 1, day, hours, minutes, 0, 0);
-    return dateObj.toISOString();
+    return new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
   };
 
   const extractTime = (isoString: string): string => {
     const date = new Date(isoString);
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${hours}:${minutes}`;
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  };
+
+  const buildFormPayload = (isEdit = false) => {
+    const form = new FormData();
+    form.append("title", formData.title);
+    form.append("description", formData.description);
+    form.append("type", formData.type);
+    form.append(
+      "positions",
+      JSON.stringify(formData.positions.split(",").map((p) => p.trim())),
+    );
+    form.append(
+      "startDate",
+      combineDateTime(formData.startDate, formData.startTime),
+    );
+    form.append("endDate", combineDateTime(formData.endDate, formData.endTime));
+    if (formData.type === "faculty") form.append("faculty", formData.faculty);
+
+    const candidatesData = candidates.map((c) => ({
+      ...(isEdit && c._id ? { _id: c._id } : {}),
+      name: c.name,
+      studentId: c.studentId,
+      position: c.position,
+      manifesto: c.manifesto || "",
+      imageUrl: c.imageUrl,
+      manifestoFileUrl: c.manifestoFileUrl,
+    }));
+    form.append("candidates", JSON.stringify(candidatesData));
+
+    // Attach profile images
+    candidates.forEach((candidate, index) => {
+      if (candidate.image instanceof File) {
+        form.append(`candidate_${index}`, candidate.image);
+      }
+    });
+
+    // Attach manifesto files
+    candidates.forEach((candidate, index) => {
+      if (candidate.manifestoFile instanceof File) {
+        form.append(`manifesto_${index}`, candidate.manifestoFile);
+      }
+    });
+
+    return form;
   };
 
   const handleCreateVoting = async () => {
@@ -229,96 +295,33 @@ export default function VotingAdmin() {
       toast.error("Please fill in all required fields");
       return;
     }
-
     if (formData.type === "faculty" && !formData.faculty) {
       toast.error("Please select a faculty for faculty-type voting");
       return;
     }
-
     if (candidates.length === 0) {
       toast.error("Please add at least one candidate");
       return;
     }
-
     try {
       setActionLoading(true);
-      const form = new FormData();
-
-      form.append("title", formData.title);
-      form.append("description", formData.description);
-      form.append("type", formData.type);
-      form.append(
-        "positions",
-        JSON.stringify(formData.positions.split(",").map((p) => p.trim())),
-      );
-      form.append(
-        "startDate",
-        combineDateTime(formData.startDate, formData.startTime),
-      );
-      form.append(
-        "endDate",
-        combineDateTime(formData.endDate, formData.endTime),
-      );
-
-      if (formData.type === "faculty") {
-        form.append("faculty", formData.faculty);
-      }
-
-      const candidatesData = candidates.map((c) => ({
-        name: c.name,
-        studentId: c.studentId,
-        position: c.position,
-        manifesto: c.manifesto || "",
-      }));
-      form.append("candidates", JSON.stringify(candidatesData));
-
-      candidates.forEach((candidate, index) => {
-        if (candidate.image) {
-          form.append(`candidate_${index}`, candidate.image);
-        }
-      });
-
       const response = await fetch(`${apiUrl}/voting`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
-        body: form,
+        body: buildFormPayload(false),
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || "Failed to create voting event");
       }
-
       toast.success("Voting event created successfully");
-
-      setFormData({
-        title: "",
-        description: "",
-        type: "src",
-        faculty: "",
-        positions: "",
-        startDate: "",
-        endDate: "",
-        startTime: "09:00",
-        endTime: "17:00",
-      });
-      setCandidates([]);
-      setCurrentCandidate({
-        name: "",
-        studentId: "",
-        position: "",
-        manifesto: "",
-        imageUrl: null,
-        image: undefined,
-        votes: 0,
-      });
       setAddDialogOpen(false);
+      resetForm();
       fetchVotings();
-    } catch (error) {
-      toast.error("Failed to create voting event");
-      console.error(error);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create voting event");
     } finally {
       setActionLoading(false);
     }
@@ -326,7 +329,6 @@ export default function VotingAdmin() {
 
   const handleUpdateVoting = async () => {
     if (!selectedVoting) return;
-
     if (
       !formData.title ||
       !formData.description ||
@@ -339,88 +341,25 @@ export default function VotingAdmin() {
       toast.error("Please fill in all required fields");
       return;
     }
-
     try {
       setActionLoading(true);
-      const form = new FormData();
-
-      form.append("title", formData.title);
-      form.append("description", formData.description);
-      form.append("type", formData.type);
-      form.append(
-        "positions",
-        JSON.stringify(formData.positions.split(",").map((p) => p.trim())),
-      );
-      form.append(
-        "startDate",
-        combineDateTime(formData.startDate, formData.startTime),
-      );
-      form.append(
-        "endDate",
-        combineDateTime(formData.endDate, formData.endTime),
-      );
-
-      if (formData.type === "faculty") {
-        form.append("faculty", formData.faculty);
-      }
-
-      const candidatesData = candidates.map((c) => ({
-        _id: c._id || undefined,
-        name: c.name,
-        studentId: c.studentId,
-        position: c.position,
-        manifesto: c.manifesto || "",
-        imageUrl: c.imageUrl,
-      }));
-      form.append("candidates", JSON.stringify(candidatesData));
-
-      candidates.forEach((candidate, index) => {
-        if (candidate.image && candidate.image instanceof File) {
-          form.append(`candidate_${index}`, candidate.image);
-        }
-      });
-
       const response = await fetch(`${apiUrl}/voting/${selectedVoting._id}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
-        body: form,
+        body: buildFormPayload(true),
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || "Failed to update voting event");
       }
-
       toast.success("Voting event updated successfully");
-
-      setFormData({
-        title: "",
-        description: "",
-        type: "src",
-        faculty: "",
-        positions: "",
-        startDate: "",
-        endDate: "",
-        startTime: "09:00",
-        endTime: "17:00",
-      });
-      setCandidates([]);
-      setCurrentCandidate({
-        name: "",
-        studentId: "",
-        position: "",
-        manifesto: "",
-        imageUrl: null,
-        image: undefined,
-        votes: 0,
-      });
       setEditDialogOpen(false);
+      resetForm();
       fetchVotings();
-    } catch (error) {
-      toast.error("Failed to update voting event");
-      console.error(error);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update voting event");
     } finally {
       setActionLoading(false);
     }
@@ -428,7 +367,6 @@ export default function VotingAdmin() {
 
   const handlePublishResults = async () => {
     if (!selectedVoting) return;
-
     try {
       setActionLoading(true);
       const response = await fetch(
@@ -442,9 +380,7 @@ export default function VotingAdmin() {
           body: JSON.stringify({}),
         },
       );
-
       if (!response.ok) throw new Error("Failed to publish results");
-
       const data = await response.json();
       const updated = votings.map((v) =>
         v._id === selectedVoting._id ? data.data : v,
@@ -454,9 +390,8 @@ export default function VotingAdmin() {
       setPublishDialogOpen(false);
       setSelectedVoting(null);
       toast.success("Results published successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to publish results");
-      console.error(error);
     } finally {
       setActionLoading(false);
     }
@@ -464,7 +399,6 @@ export default function VotingAdmin() {
 
   const handleConfirmDelete = async () => {
     if (!selectedVoting) return;
-
     try {
       setActionLoading(true);
       const response = await fetch(`${apiUrl}/voting/${selectedVoting._id}`, {
@@ -473,43 +407,86 @@ export default function VotingAdmin() {
           Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
       });
-
       if (!response.ok) throw new Error("Failed to delete voting event");
-
       const updated = votings.filter((v) => v._id !== selectedVoting._id);
       setVotings(updated);
       filterVotings(updated, searchTerm, typeFilter);
       setDeleteDialogOpen(false);
       setSelectedVoting(null);
       toast.success("Voting event deleted successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete voting event");
-      console.error(error);
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // Download results as CSV
+  const handleDownloadResults = (voting: Voting) => {
+    const rows: string[][] = [
+      ["Position", "Candidate Name", "Student ID", "Votes"],
+    ];
+
+    // Group by position and sort by votes descending
+    const byPosition: Record<string, Candidate[]> = {};
+    voting.candidates.forEach((c) => {
+      if (!byPosition[c.position]) byPosition[c.position] = [];
+      byPosition[c.position].push(c);
+    });
+
+    Object.entries(byPosition).forEach(([position, cands]) => {
+      const sorted = [...cands].sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
+      sorted.forEach((c) => {
+        rows.push([position, c.name, c.studentId, String(c.votes ?? 0)]);
+      });
+    });
+
+    const csv = rows
+      .map((r) => r.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${voting.title.replace(/\s+/g, "_")}_results.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      description: "",
+      type: "src",
+      faculty: "",
+      positions: DEFAULT_POSITIONS.join(", "),
+      startDate: "",
+      endDate: "",
+      startTime: "09:00",
+      endTime: "17:00",
+    });
+    setCandidates([]);
+    resetCandidate();
   };
 
   const getVotingStatus = (voting: Voting) => {
     const now = new Date();
     const start = new Date(voting.startDate);
     const end = new Date(voting.endDate);
-
     if (now < start) return "Upcoming";
     if (now > end) return "Completed";
     return "Active";
   };
 
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
+  const formatDateTime = (dateString: string) =>
+    new Date(dateString).toLocaleString();
 
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-gray-700 rounded-lg"></div>
+            <div key={i} className="h-16 bg-gray-700 rounded-lg" />
           ))}
         </div>
       </div>
@@ -518,35 +495,15 @@ export default function VotingAdmin() {
 
   return (
     <div className="space-y-6">
-      {/* Header - matches announcement page design */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Voting Management
         </h1>
         <Button
           onClick={() => {
+            resetForm();
             setAddDialogOpen(true);
-            setFormData({
-              title: "",
-              description: "",
-              type: "src",
-              faculty: "",
-              positions: "",
-              startDate: "",
-              endDate: "",
-              startTime: "09:00",
-              endTime: "17:00",
-            });
-            setCandidates([]);
-            setCurrentCandidate({
-              name: "",
-              studentId: "",
-              position: "",
-              manifesto: "",
-              imageUrl: null,
-              image: undefined,
-              votes: 0,
-            });
           }}
           className="bg-linear-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
         >
@@ -555,7 +512,7 @@ export default function VotingAdmin() {
         </Button>
       </div>
 
-      {/* Filter and Search - matches announcement page design */}
+      {/* Filter and Search */}
       <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
         <div className="mb-6 grid gap-4 md:grid-cols-2">
           <Input
@@ -582,7 +539,6 @@ export default function VotingAdmin() {
           </Select>
         </div>
 
-        {/* Voting Events List - matches announcement page design */}
         {filteredVotings.length === 0 ? (
           <div className="py-8 text-center text-gray-400">
             No voting events found
@@ -591,10 +547,6 @@ export default function VotingAdmin() {
           <div className="space-y-4">
             {filteredVotings.map((voting) => {
               const status = getVotingStatus(voting);
-              const firstCandidateImage = voting.candidates.find(
-                (c) => c.imageUrl,
-              )?.imageUrl;
-
               return (
                 <div
                   key={voting._id}
@@ -602,9 +554,11 @@ export default function VotingAdmin() {
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      {firstCandidateImage && (
+                      {voting.candidates.find((c) => c.imageUrl)?.imageUrl && (
                         <img
-                          src={firstCandidateImage || "/placeholder.svg"}
+                          src={
+                            voting.candidates.find((c) => c.imageUrl)!.imageUrl!
+                          }
                           alt="Candidate"
                           className="w-12 h-12 rounded-lg object-cover"
                         />
@@ -614,7 +568,7 @@ export default function VotingAdmin() {
                           {voting.title}
                         </h3>
                         <p className="text-sm text-gray-400 mt-1">
-                          {formatDateTime(voting.startDate)} -{" "}
+                          {formatDateTime(voting.startDate)} —{" "}
                           {formatDateTime(voting.endDate)}
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
@@ -646,6 +600,17 @@ export default function VotingAdmin() {
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    {voting.resultsPublished && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownloadResults(voting)}
+                        className="border-green-600 text-green-400 hover:bg-green-900/20"
+                        title="Download results as CSV"
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -703,7 +668,7 @@ export default function VotingAdmin() {
         )}
       </div>
 
-      {/* Add/Edit Voting Dialog */}
+      {/* Add / Edit Dialog */}
       <Dialog
         open={addDialogOpen || editDialogOpen}
         onOpenChange={(open) => {
@@ -721,6 +686,7 @@ export default function VotingAdmin() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Title */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Title
@@ -730,10 +696,11 @@ export default function VotingAdmin() {
                 onChange={(e) =>
                   setFormData({ ...formData, title: e.target.value })
                 }
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
               />
             </div>
 
+            {/* Description */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Description
@@ -743,10 +710,11 @@ export default function VotingAdmin() {
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
               />
             </div>
 
+            {/* Type + Faculty */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -774,7 +742,6 @@ export default function VotingAdmin() {
                   </SelectContent>
                 </Select>
               </div>
-
               {formData.type === "faculty" && (
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -785,12 +752,13 @@ export default function VotingAdmin() {
                     onChange={(e) =>
                       setFormData({ ...formData, faculty: e.target.value })
                     }
-                    className="bg-gray-800 border-gray-700 text-white"
+                    className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
                   />
                 </div>
               )}
             </div>
 
+            {/* Positions — includes Weekend Rep by default */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Positions (comma-separated)
@@ -800,11 +768,12 @@ export default function VotingAdmin() {
                 onChange={(e) =>
                   setFormData({ ...formData, positions: e.target.value })
                 }
-                className="bg-gray-800 border-gray-700 text-white"
-                placeholder="PRESIDENT, VICE-PRESIDENT, SECRETARY"
+                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                placeholder="PRESIDENT, VICE-PRESIDENT, SECRETARY, WEEKEND REP"
               />
             </div>
 
+            {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -819,7 +788,6 @@ export default function VotingAdmin() {
                   className="bg-gray-800 border-gray-700 text-white"
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Start Time
@@ -834,7 +802,6 @@ export default function VotingAdmin() {
                 />
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -849,7 +816,6 @@ export default function VotingAdmin() {
                   className="bg-gray-800 border-gray-700 text-white"
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   End Time
@@ -868,12 +834,13 @@ export default function VotingAdmin() {
             {/* Candidates Section */}
             <div className="border-t border-gray-700 pt-4">
               <h3 className="text-lg font-semibold text-white mb-4">
-                Candidates
+                Add Candidate
               </h3>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
+                {/* Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     Name
                   </label>
                   <Input
@@ -884,13 +851,15 @@ export default function VotingAdmin() {
                         name: e.target.value,
                       })
                     }
-                    className="bg-gray-800 border-gray-700 text-white"
+                    className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                    placeholder="Full name"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
+                  {/* Student ID */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
                       Student ID
                     </label>
                     <Input
@@ -901,12 +870,14 @@ export default function VotingAdmin() {
                           studentId: e.target.value,
                         })
                       }
-                      className="bg-gray-800 border-gray-700 text-white"
+                      className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                      placeholder="e.g. UG/2021/001"
                     />
                   </div>
 
+                  {/* Position */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
                       Position
                     </label>
                     <Select
@@ -940,11 +911,12 @@ export default function VotingAdmin() {
                   </div>
                 </div>
 
+                {/* Manifesto text */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Manifesto
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Manifesto (text)
                   </label>
-                  <Input
+                  <textarea
                     value={currentCandidate.manifesto}
                     onChange={(e) =>
                       setCurrentCandidate({
@@ -952,13 +924,41 @@ export default function VotingAdmin() {
                         manifesto: e.target.value,
                       })
                     }
-                    className="bg-gray-800 border-gray-700 text-white"
+                    rows={3}
+                    className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 text-sm resize-none"
+                    placeholder="Brief manifesto or leave blank if uploading a file below"
                   />
                 </div>
 
+                {/* Manifesto file */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Profile Image
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Manifesto File (PDF or image — optional)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      ref={manifestoFileRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,image/*"
+                      onChange={handleManifestoFileUpload}
+                      className="bg-gray-800 border-gray-700 text-white flex-1"
+                    />
+                    {currentCandidate.manifestoFile && (
+                      <span className="flex items-center gap-1 text-xs text-green-400 shrink-0">
+                        <FileText className="h-4 w-4" />
+                        {currentCandidate.manifestoFile.name.slice(0, 20)}
+                        {currentCandidate.manifestoFile.name.length > 20
+                          ? "…"
+                          : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Profile image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Profile Photo
                   </label>
                   <div className="flex items-center gap-4">
                     <Input
@@ -969,9 +969,9 @@ export default function VotingAdmin() {
                     />
                     {currentCandidate.imageUrl && (
                       <img
-                        src={currentCandidate.imageUrl || "/placeholder.svg"}
+                        src={currentCandidate.imageUrl}
                         alt="Preview"
-                        className="w-12 h-12 rounded-full object-cover"
+                        className="w-12 h-12 rounded-full object-cover shrink-0"
                       />
                     )}
                   </div>
@@ -985,55 +985,71 @@ export default function VotingAdmin() {
                 </Button>
               </div>
 
-              {/* Candidates List */}
-              <div className="mt-6 space-y-2">
-                {candidates.map((candidate) => (
-                  <div
-                    key={candidate.studentId}
-                    className="flex items-center justify-between bg-gray-800 p-3 rounded"
-                  >
-                    <div className="flex items-center gap-3">
-                      {candidate.imageUrl && (
-                        <img
-                          src={candidate.imageUrl || "/placeholder.svg"}
-                          alt={candidate.name}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                      )}
-                      <div>
-                        <p className="text-white font-medium">
-                          {candidate.name}
-                        </p>
-                        <p className="text-gray-400 text-sm">
-                          {candidate.studentId} • {candidate.position}
-                        </p>
+              {/* Candidates List — FIX: explicit light text on dark bg */}
+              {candidates.length > 0 && (
+                <div className="mt-6 space-y-2">
+                  <p className="text-sm font-medium text-gray-300 mb-2">
+                    Added Candidates ({candidates.length})
+                  </p>
+                  {candidates.map((candidate) => (
+                    <div
+                      key={candidate.studentId}
+                      className="flex items-center justify-between bg-gray-800 border border-gray-700 p-3 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        {candidate.imageUrl ? (
+                          <img
+                            src={candidate.imageUrl}
+                            alt={candidate.name}
+                            className="w-10 h-10 rounded-full object-cover shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                            <span className="text-white text-sm font-bold">
+                              {candidate.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          {/* FIX: text-white and text-gray-300 so it's visible on dark bg */}
+                          <p className="text-white font-semibold text-sm">
+                            {candidate.name}
+                          </p>
+                          <p className="text-gray-300 text-xs">
+                            {candidate.studentId} • {candidate.position}
+                          </p>
+                          {candidate.manifestoFile && (
+                            <p className="text-blue-400 text-xs flex items-center gap-1 mt-0.5">
+                              <FileText className="h-3 w-3" />
+                              Manifesto file attached
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setCurrentCandidate(candidate)}
+                          className="text-blue-400 hover:bg-blue-900/20 hover:text-blue-300"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            handleRemoveCandidate(candidate.studentId)
+                          }
+                          className="text-red-400 hover:bg-red-900/20 hover:text-red-300"
+                        >
+                          Remove
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setCurrentCandidate(candidate);
-                        }}
-                        className="text-blue-400 hover:bg-blue-900/20"
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() =>
-                          handleRemoveCandidate(candidate.studentId)
-                        }
-                        className="text-red-400 hover:bg-red-900/20"
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1067,9 +1083,22 @@ export default function VotingAdmin() {
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="border-gray-700 bg-gray-900 max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-white">
-              {selectedVoting?.title} - Results
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-white">
+                {selectedVoting?.title} — Results
+              </DialogTitle>
+              {selectedVoting && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleDownloadResults(selectedVoting)}
+                  className="border-green-600 text-green-400 hover:bg-green-900/20 ml-4"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download CSV
+                </Button>
+              )}
+            </div>
           </DialogHeader>
           {selectedVoting && (
             <div className="space-y-4">
@@ -1077,7 +1106,6 @@ export default function VotingAdmin() {
                 <p className="text-sm text-gray-400">Description</p>
                 <p className="text-gray-300">{selectedVoting.description}</p>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-400">Type</p>
@@ -1090,17 +1118,15 @@ export default function VotingAdmin() {
                   </p>
                 </div>
               </div>
-
               {selectedVoting.faculty && (
                 <div>
                   <p className="text-sm text-gray-400">Faculty</p>
                   <p className="text-white">{selectedVoting.faculty}</p>
                 </div>
               )}
-
               <div>
                 <p className="text-sm text-gray-400 mb-3">
-                  Candidates & Results
+                  Candidates &amp; Results
                 </p>
                 <div className="space-y-3">
                   {selectedVoting.candidates.map((candidate) => (
@@ -1109,12 +1135,18 @@ export default function VotingAdmin() {
                       className="flex items-start justify-between bg-gray-800 p-3 rounded"
                     >
                       <div className="flex items-start gap-3 flex-1">
-                        {candidate.imageUrl && (
+                        {candidate.imageUrl ? (
                           <img
-                            src={candidate.imageUrl || "/placeholder.svg"}
+                            src={candidate.imageUrl}
                             alt={candidate.name}
                             className="w-12 h-12 rounded-full object-cover shrink-0"
                           />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                            <span className="text-white font-bold">
+                              {candidate.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
                         )}
                         <div className="flex-1">
                           <p className="font-semibold text-white">
@@ -1131,6 +1163,17 @@ export default function VotingAdmin() {
                               {candidate.manifesto}
                             </p>
                           )}
+                          {candidate.manifestoFileUrl && (
+                            <a
+                              href={candidate.manifestoFileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1"
+                            >
+                              <FileText className="h-3 w-3" />
+                              View Manifesto File
+                            </a>
+                          )}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -1143,7 +1186,6 @@ export default function VotingAdmin() {
                   ))}
                 </div>
               </div>
-
               <div>
                 <p className="text-sm text-gray-400">Voting Period</p>
                 <p className="text-gray-300 text-sm">

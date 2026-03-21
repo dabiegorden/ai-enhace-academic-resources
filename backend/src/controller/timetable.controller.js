@@ -2,6 +2,7 @@ import Timetable from "../models/timetable.model.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { broadcastToRoles } from "../controller/notification.controller.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,7 +34,7 @@ export const uploadTimetableDocument = async (req, res) => {
       const oldFilePath = path.join(
         __dirname,
         "../public/uploads/timetables",
-        timetable.timetableDocument.filename
+        timetable.timetableDocument.filename,
       );
       if (fs.existsSync(oldFilePath)) {
         fs.unlinkSync(oldFilePath);
@@ -79,7 +80,7 @@ export const downloadTimetableDocument = async (req, res) => {
 
     const timetable = await Timetable.findById(id).populate(
       "timetableDocument.uploadedBy",
-      "firstName lastName"
+      "firstName lastName",
     );
 
     if (!timetable || !timetable.timetableDocument) {
@@ -92,7 +93,7 @@ export const downloadTimetableDocument = async (req, res) => {
     const filePath = path.join(
       __dirname,
       "../public/uploads/timetables",
-      timetable.timetableDocument.filename
+      timetable.timetableDocument.filename,
     );
 
     if (!fs.existsSync(filePath)) {
@@ -132,7 +133,7 @@ export const deleteTimetableDocument = async (req, res) => {
       const filePath = path.join(
         __dirname,
         "../public/uploads/timetables",
-        timetable.timetableDocument.filename
+        timetable.timetableDocument.filename,
       );
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
@@ -312,7 +313,7 @@ export const getMyTimetable = async (req, res) => {
 
     const timetable = await Timetable.findOne(query).populate(
       "createdBy",
-      "firstName lastName email"
+      "firstName lastName email",
     );
 
     if (!timetable) {
@@ -385,7 +386,28 @@ export const updateTimetable = async (req, res) => {
     if (semester) timetable.semester = semester;
     if (academicYear) timetable.academicYear = academicYear;
     if (isActive !== undefined) timetable.isActive = isActive;
-    if (isPublished !== undefined) timetable.isPublished = isPublished;
+    if (isPublished === true || isPublished === "true") {
+      const io = req.app.get("io");
+      await broadcastToRoles({
+        roles: ["student"],
+        type: "timetable",
+        title: "🗓️ Timetable Published",
+        message:
+          "A new timetable for " +
+          timetable.programName +
+          " Year " +
+          timetable.yearOfStudy +
+          " has been published.",
+        relatedId: timetable._id,
+        relatedModel: "Timetable",
+        metadata: {
+          programCode: timetable.programCode,
+          yearOfStudy: timetable.yearOfStudy,
+          semester: timetable.semester,
+        },
+        io,
+      });
+    }
     if (specialization) timetable.specialization = specialization;
     if (timeSlots) timetable.timeSlots = timeSlots;
     if (breakTime) timetable.breakTime = breakTime;
@@ -444,7 +466,7 @@ export const addCourseToSlot = async (req, res) => {
     }
 
     const timeSlot = timetable.timeSlots.find(
-      (ts) => ts.slotNumber === slotNumber
+      (ts) => ts.slotNumber === slotNumber,
     );
 
     if (!timeSlot) {

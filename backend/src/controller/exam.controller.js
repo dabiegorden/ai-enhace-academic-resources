@@ -1,4 +1,5 @@
 import Exam from "../models/exam.model.js";
+import { broadcastToRoles } from "../controller/notification.controller.js";
 
 // Create a new exam (draft)
 export const createExam = async (req, res) => {
@@ -188,44 +189,55 @@ export const removeQuestion = async (req, res) => {
 export const startExam = async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id);
-
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: "Exam not found",
-      });
-    }
-
-    if (exam.questions.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Cannot start exam without questions",
-      });
-    }
-
-    if (exam.status === "active") {
-      return res.status(400).json({
-        success: false,
-        message: "Exam is already active",
-      });
-    }
+    if (!exam)
+      return res
+        .status(404)
+        .json({ success: false, message: "Exam not found" });
+    if (exam.questions.length === 0)
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Cannot start exam without questions",
+        });
+    if (exam.status === "active")
+      return res
+        .status(400)
+        .json({ success: false, message: "Exam is already active" });
 
     exam.status = "active";
     exam.startedAt = new Date();
     exam.endedAt = new Date(Date.now() + exam.durationInMinutes * 60 * 1000);
-
     await exam.save();
 
-    res.status(200).json({
-      success: true,
-      message: "Exam started successfully",
-      data: exam,
+    // Notify all students
+    const io = req.app.get("io");
+    await broadcastToRoles({
+      roles: ["student"],
+      type: "exam",
+      title: "📋 Exam Started: " + exam.title,
+      message:
+        "An exam has started. You have " +
+        exam.durationInMinutes +
+        " minutes. Join now!",
+      relatedId: exam._id,
+      relatedModel: "Exam",
+      metadata: {
+        durationInMinutes: exam.durationInMinutes,
+        endedAt: exam.endedAt,
+      },
+      io,
     });
+
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "Exam started successfully",
+        data: exam,
+      });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 

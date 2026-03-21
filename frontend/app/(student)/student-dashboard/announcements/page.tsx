@@ -25,10 +25,18 @@ import {
   Download,
   Eye,
   FileText,
+  Image as ImageIcon,
   Pin,
   User,
   Filter,
 } from "lucide-react";
+
+interface Attachment {
+  url: string;
+  cloudinaryId: string;
+  originalName?: string;
+  mimeType?: string;
+}
 
 interface Announcement {
   _id: string;
@@ -43,10 +51,7 @@ interface Announcement {
     email: string;
     role: string;
   };
-  attachments: Array<{
-    url: string;
-    cloudinaryId: string;
-  }>;
+  attachments: Attachment[];
   isPinned: boolean;
   expiryDate?: string;
   views: number;
@@ -66,43 +71,34 @@ export default function StudentAnnouncementPage() {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  // Fetch announcements
   const fetchAnnouncements = async () => {
     try {
       setLoading(true);
       const queryParams = filterType !== "all" ? `?type=${filterType}` : "";
       const response = await fetch(`${apiUrl}/announcements${queryParams}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await response.json();
       if (data.success) {
         setAnnouncements(data.data || []);
       } else {
         toast.error(data.message || "Failed to fetch announcements");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch announcements");
-      console.error("Fetch error:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  // View announcement details and increment view count
   const viewAnnouncement = async (announcement: Announcement) => {
     try {
       const response = await fetch(
         `${apiUrl}/announcements/${announcement._id}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         },
       );
-
       const data = await response.json();
       if (data.success) {
         setSelectedAnnouncement(data.data);
@@ -110,9 +106,8 @@ export default function StudentAnnouncementPage() {
       } else {
         toast.error("Failed to load announcement details");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to load announcement details");
-      console.error("View error:", error);
     }
   };
 
@@ -120,33 +115,33 @@ export default function StudentAnnouncementPage() {
     fetchAnnouncements();
   }, [filterType]);
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
 
-  // Get type badge color
   const getTypeBadge = (type: string) => {
-    const badges = {
+    const badges: Record<string, string> = {
       general: "bg-blue-900/30 text-blue-300 border-blue-700",
       faculty: "bg-purple-900/30 text-purple-300 border-purple-700",
       academic: "bg-green-900/30 text-green-300 border-green-700",
       event: "bg-orange-900/30 text-orange-300 border-orange-700",
       urgent: "bg-red-900/30 text-red-300 border-red-700",
     };
-    return badges[type as keyof typeof badges] || badges.general;
+    return badges[type] || badges.general;
   };
 
-  // Download attachment
-  const downloadAttachment = (url: string) => {
-    window.open(url, "_blank");
-  };
+  // Show image or PDF icon based on mime type
+  const AttachmentIcon = ({ mimeType }: { mimeType?: string }) =>
+    mimeType?.startsWith("image/") ? (
+      <ImageIcon className="size-5 text-blue-400 shrink-0" />
+    ) : (
+      <FileText className="size-5 text-blue-400 shrink-0" />
+    );
 
   const filterTypes = [
     { value: "all", label: "All" },
@@ -199,7 +194,7 @@ export default function StudentAnnouncementPage() {
           ))}
         </div>
 
-        {/* Announcements List */}
+        {/* List */}
         {loading ? (
           <div className="text-center py-12">
             <p className="text-gray-400">Loading announcements...</p>
@@ -231,8 +226,7 @@ export default function StudentAnnouncementPage() {
                       </Badge>
                       {announcement.isPinned && (
                         <Badge className="bg-yellow-900/30 text-yellow-300 border-yellow-700">
-                          <Pin className="size-3 mr-1" />
-                          Pinned
+                          <Pin className="size-3 mr-1" /> Pinned
                         </Badge>
                       )}
                       {announcement.faculty && (
@@ -279,7 +273,8 @@ export default function StudentAnnouncementPage() {
                         className="bg-gray-700 text-gray-300 border-gray-600"
                       >
                         <FileText className="size-3 mr-1" />
-                        {announcement.attachments.length} file(s)
+                        {announcement.attachments.length} file
+                        {announcement.attachments.length !== 1 ? "s" : ""}
                       </Badge>
                     )}
                   </div>
@@ -290,7 +285,7 @@ export default function StudentAnnouncementPage() {
         )}
       </div>
 
-      {/* Announcement Details Dialog */}
+      {/* Detail Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] bg-gray-800 border-gray-700 text-white">
           <DialogHeader>
@@ -306,8 +301,7 @@ export default function StudentAnnouncementPage() {
               </Badge>
               {selectedAnnouncement?.isPinned && (
                 <Badge className="bg-yellow-900/30 text-yellow-300 border-yellow-700">
-                  <Pin className="size-3 mr-1" />
-                  Pinned
+                  <Pin className="size-3 mr-1" /> Pinned
                 </Badge>
               )}
             </div>
@@ -360,35 +354,57 @@ export default function StudentAnnouncementPage() {
                 )}
               </div>
 
-              {/* Attachments */}
+              {/* Attachments — show image preview for images, download button for all */}
               {selectedAnnouncement?.attachments &&
                 selectedAnnouncement.attachments.length > 0 && (
                   <div className="space-y-2">
                     <h3 className="font-semibold text-lg text-white flex items-center gap-2">
                       <FileText className="size-5" />
-                      Attachments
+                      Attachments ({selectedAnnouncement.attachments.length})
                     </h3>
                     <div className="space-y-2">
                       {selectedAnnouncement.attachments.map(
                         (attachment, idx) => (
                           <div
                             key={idx}
-                            className="bg-gray-700/50 rounded-lg p-3 flex items-center justify-between"
+                            className="bg-gray-700/50 rounded-lg overflow-hidden"
                           >
-                            <div className="flex items-center gap-2">
-                              <FileText className="size-5 text-blue-400" />
-                              <span className="text-sm text-gray-300">
-                                Attachment {idx + 1}
-                              </span>
+                            {/* If it's an image, show a preview */}
+                            {attachment.mimeType?.startsWith("image/") && (
+                              <img
+                                src={attachment.url}
+                                alt={
+                                  attachment.originalName ||
+                                  `Attachment ${idx + 1}`
+                                }
+                                className="w-full max-h-48 object-cover"
+                              />
+                            )}
+                            <div className="flex items-center justify-between p-3">
+                              <div className="flex items-center gap-2">
+                                <AttachmentIcon
+                                  mimeType={attachment.mimeType}
+                                />
+                                <span className="text-sm text-gray-300">
+                                  {attachment.originalName ||
+                                    `Attachment ${idx + 1}`}
+                                </span>
+                              </div>
+                              <a
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download
+                              >
+                                <Button
+                                  size="sm"
+                                  className="bg-blue-600 hover:bg-blue-700"
+                                >
+                                  <Download className="size-4 mr-2" />
+                                  Download
+                                </Button>
+                              </a>
                             </div>
-                            <Button
-                              size="sm"
-                              onClick={() => downloadAttachment(attachment.url)}
-                              className="bg-blue-600 hover:bg-blue-700"
-                            >
-                              <Download className="size-4 mr-2" />
-                              Download
-                            </Button>
                           </div>
                         ),
                       )}

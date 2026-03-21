@@ -3,6 +3,7 @@ import {
   getAllUsers,
   getUserById,
   updateProfile,
+  changePassword,
   updateUser,
   uploadProfileImage,
   deleteUser,
@@ -15,12 +16,9 @@ import upload from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
-// Public/Student routes
-router.get("/students/by-program", protect, getStudentsByProgram);
-router.get("/lecturers", protect, getLecturers);
-router.get("/:id", protect, getUserById);
+// ── Own-profile routes (any authenticated user) ───────────────────────────────
 router.put("/profile", protect, updateProfile);
-router.put("/:id", protect, updateUser);
+router.put("/profile/password", protect, changePassword);
 router.post(
   "/profile-image",
   protect,
@@ -28,14 +26,15 @@ router.post(
   uploadProfileImage,
 );
 
-// Admin only routes
+// ── Listing helpers ───────────────────────────────────────────────────────────
+router.get("/students/by-program", protect, getStudentsByProgram);
+router.get("/lecturers", protect, getLecturers);
+
+// ── Admin / Lecturer routes ───────────────────────────────────────────────────
 router.get("/", protect, authorize("lecturer", "admin"), getAllUsers);
-router.delete("/:id", protect, authorize("lecturer", "admin"), deleteUser);
-router.put(
-  "/:id/toggle-status",
-  protect,
-  authorize("lecturer", "admin"),
-  toggleUserStatus,
-);
+router.get("/:id", protect, getUserById);
+router.put("/:id", protect, authorize("admin"), updateUser);
+router.delete("/:id", protect, authorize("admin"), deleteUser);
+router.put("/:id/toggle-status", protect, authorize("admin"), toggleUserStatus);
 
 export default router;

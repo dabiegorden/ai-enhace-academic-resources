@@ -2,6 +2,8 @@ import LectureNote from "../models/lecturenote.model.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { broadcastNotification } from "../controller/notification.controller.js";
+import User from "../models/User.model.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,13 +13,10 @@ const __dirname = path.dirname(__filename);
 // @access  Private (Lecturer/Admin)
 export const uploadLectureNote = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Please upload a file",
-      });
-    }
-
+    if (!req.file)
+      return res
+        .status(400)
+        .json({ success: false, message: "Please upload a file" });
     const {
       title,
       description,
@@ -28,8 +27,6 @@ export const uploadLectureNote = async (req, res) => {
       yearOfStudy,
       tags,
     } = req.body;
-
-    // Validate required fields
     if (
       !title ||
       !course ||
@@ -38,30 +35,25 @@ export const uploadLectureNote = async (req, res) => {
       !program ||
       !yearOfStudy
     ) {
-      // Clean up uploaded file if validation fails
       if (req.file) {
-        const filePath = path.join(
+        const fp = path.join(
           __dirname,
           "../public/uploads/assignments",
           req.file.filename,
         );
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
+        if (fs.existsSync(fp)) fs.unlinkSync(fp);
       }
-      return res.status(400).json({
-        success: false,
-        message: "Please provide all required fields",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Please provide all required fields",
+        });
     }
-
-    // Determine file type from extension
     const fileExtension = path
       .extname(req.file.originalname)
       .slice(1)
       .toLowerCase();
-
-    // Create lecture note document with filename pattern (like timetable)
     const lectureNote = await LectureNote.create({
       title,
       description,
@@ -69,7 +61,7 @@ export const uploadLectureNote = async (req, res) => {
       courseCode,
       faculty,
       program,
-      yearOfStudy: Number.parseInt(yearOfStudy),
+      yearOfStudy: parseInt(yearOfStudy),
       filename: req.file.filename,
       originalName: req.file.originalname,
       fileType: fileExtension,
@@ -77,34 +69,55 @@ export const uploadLectureNote = async (req, res) => {
       uploadedBy: req.user.id,
       tags: tags ? JSON.parse(tags) : [],
     });
-
-    // Populate uploader info
     await lectureNote.populate("uploadedBy", "firstName lastName email");
 
-    res.status(201).json({
-      success: true,
-      message: "Lecture note uploaded successfully",
-      data: lectureNote,
-    });
-  } catch (error) {
-    console.error("Upload error:", error);
+    // Notify matching students
+    const io = req.app.get("io");
+    const uploaderName = req.user.firstName + " " + req.user.lastName;
+    const students = await User.find({
+      role: "student",
+      faculty,
+      program,
+      yearOfStudy: parseInt(yearOfStudy),
+      isActive: true,
+    }).select("_id");
+    const studentIds = students.map((s) => s._id.toString());
+    if (studentIds.length > 0) {
+      await broadcastNotification({
+        userId: studentIds,
+        type: "note",
+        title: "📄 New Lecture Note: " + title,
+        message:
+          uploaderName +
+          " uploaded a new note for " +
+          course +
+          " (" +
+          courseCode +
+          ")",
+        relatedId: lectureNote._id,
+        relatedModel: "LectureNote",
+        metadata: { course, courseCode, fileType: fileExtension },
+        io,
+      });
+    }
 
-    // Clean up uploaded file on error
+    res
+      .status(201)
+      .json({
+        success: true,
+        message: "Lecture note uploaded successfully",
+        data: lectureNote,
+      });
+  } catch (error) {
     if (req.file) {
-      const filePath = path.join(
+      const fp = path.join(
         __dirname,
         "../public/uploads/assignments",
         req.file.filename,
       );
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
     }
-
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 

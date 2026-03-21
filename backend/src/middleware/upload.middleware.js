@@ -3,26 +3,37 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 
-// Configure multer for file uploads
+// Configure multer for file uploads — memory storage so we can pipe to Cloudinary
 const storage = multer.memoryStorage();
 
-const allowedMimeTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+// Accept images AND common document types for announcements/voting
+const allowedMimeTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
 
 const fileFilter = (req, file, cb) => {
   if (!allowedMimeTypes.includes(file.mimetype)) {
     return cb(
-      new Error("Unsupported file type. Only image files are allowed"),
+      new Error(
+        "Unsupported file type. Allowed: images (jpg, png, gif, webp) and documents (pdf, doc, docx)",
+      ),
       false,
     );
   }
   cb(null, true);
 };
 
-// Use .any() to accept any field names (like candidate_0, candidate_1, etc.)
+// Default export — used by announcements and voting
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB max file size
+    fileSize: 10 * 1024 * 1024, // 10MB max per file
   },
   fileFilter: fileFilter,
 });
@@ -41,11 +52,8 @@ const submissionsDir = path.join(__dirname, "../public/uploads/submissions");
   }
 });
 
-// Storage configuration for assignments
 const assignmentStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, assignmentsDir);
-  },
+  destination: (req, file, cb) => cb(null, assignmentsDir),
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
@@ -54,11 +62,8 @@ const assignmentStorage = multer.diskStorage({
   },
 });
 
-// Storage configuration for submissions
 const submissionStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, submissionsDir);
-  },
+  destination: (req, file, cb) => cb(null, submissionsDir),
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
@@ -67,7 +72,6 @@ const submissionStorage = multer.diskStorage({
   },
 });
 
-// File filter for supported document types
 const documentFileFilter = (req, file, cb) => {
   const allowedMimes = [
     "application/pdf",
@@ -97,7 +101,6 @@ const documentFileFilter = (req, file, cb) => {
   ];
 
   const ext = path.extname(file.originalname).toLowerCase();
-
   if (allowedMimes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
@@ -110,19 +113,14 @@ const documentFileFilter = (req, file, cb) => {
   }
 };
 
-// Multer instances for different upload types
 export const uploadAssignments = multer({
   storage: assignmentStorage,
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max file size
-  },
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: documentFileFilter,
 });
 
 export const uploadSubmissions = multer({
   storage: submissionStorage,
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max file size
-  },
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: documentFileFilter,
 });
