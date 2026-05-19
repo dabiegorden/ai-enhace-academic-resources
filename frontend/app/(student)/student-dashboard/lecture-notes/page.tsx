@@ -21,13 +21,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   FileText,
   Download,
   Eye,
@@ -36,8 +29,12 @@ import {
   BookOpen,
   Search,
   Loader2,
-  Filter,
   X,
+  GraduationCap,
+  BookMarked,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
@@ -69,10 +66,20 @@ interface LectureNote {
   updatedAt: string;
 }
 
+interface EnrollmentInfo {
+  faculty: string;
+  program: string;
+  yearOfStudy: number;
+}
+
 function StudentsViewLectureNotes() {
   const [notes, setNotes] = useState<LectureNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [courseCodeFilter, setCourseCodeFilter] = useState("");
+  const [enrollment, setEnrollment] = useState<EnrollmentInfo | null>(null);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
+
   const [selectedNote, setSelectedNote] = useState<LectureNote | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
@@ -82,22 +89,19 @@ function StudentsViewLectureNotes() {
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
   const [explainDialogOpen, setExplainDialogOpen] = useState(false);
 
-  // Filter states
-  const [facultyFilter, setFacultyFilter] = useState("");
-  const [programFilter, setProgramFilter] = useState("");
-  const [yearFilter, setYearFilter] = useState("");
-
   const [aiSummary, setAiSummary] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-
   const [concept, setConcept] = useState("");
   const [explanation, setExplanation] = useState("");
 
+  // Group notes by course code for organised display
+  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(
+    new Set(),
+  );
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-  const baseUrl = apiUrl.replace("/api", "");
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const searchParams = useSearchParams();
@@ -109,7 +113,7 @@ function StudentsViewLectureNotes() {
 
   useEffect(() => {
     fetchNotes();
-  }, [facultyFilter, programFilter, yearFilter]);
+  }, [courseCodeFilter]);
 
   // Cleanup preview URL when dialog closes
   useEffect(() => {
@@ -122,130 +126,122 @@ function StudentsViewLectureNotes() {
   const fetchNotes = async () => {
     try {
       setLoading(true);
+      setEnrollmentError(null);
 
-      // Build query params - use getAllLectureNotes endpoint instead of my-notes
       const params = new URLSearchParams();
-      if (searchQuery) params.append("search", searchQuery);
-      if (facultyFilter) params.append("faculty", facultyFilter);
-      if (programFilter) params.append("program", programFilter);
-      if (yearFilter) params.append("yearOfStudy", yearFilter);
+      if (courseCodeFilter) params.append("courseCode", courseCodeFilter);
 
-      const response = await fetch(`${apiUrl}/notes?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      // Always use /my-notes — the backend strictly filters by the student's
+      // enrolled faculty, program, and year of study
+      const response = await fetch(
+        `${apiUrl}/notes/my-notes?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
         },
-      });
+      );
 
       const data = await response.json();
-      console.log("[v0] API Response:", data);
+
+      if (!response.ok) {
+        // 400 means the student's profile is missing enrollment info
+        if (response.status === 400) {
+          setEnrollmentError(data.message);
+        } else {
+          toast.error(data.message || "Failed to fetch lecture notes");
+        }
+        setNotes([]);
+        return;
+      }
 
       if (data.success) {
         setNotes(data.data || []);
+        // Store enrollment context returned by the backend
+        if (data.enrollment) {
+          setEnrollment(data.enrollment);
+        }
+        // Auto-expand all course groups on first load
+        if (data.data?.length > 0) {
+          const codes = new Set<string>(
+            data.data.map((n: LectureNote) => n.courseCode),
+          );
+          setExpandedCourses(codes);
+        }
       } else {
-        console.log("[v0] API Error:", data.message);
         toast.error(data.message || "Failed to fetch lecture notes");
       }
     } catch (error) {
       toast.error("Failed to fetch lecture notes");
-      console.error("[v0] Fetch error:", error);
+      console.error("[notes] Fetch error:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = () => {
-    fetchNotes();
-  };
+  const handleSearch = () => fetchNotes();
 
   const handleClearFilters = () => {
-    setFacultyFilter("");
-    setProgramFilter("");
-    setYearFilter("");
+    setCourseCodeFilter("");
     setSearchQuery("");
   };
 
-  const handleViewNote = (note: LectureNote) => {
-    setSelectedNote(note);
-    setViewDialogOpen(true);
-  };
-
+  // ─── Preview ────────────────────────────────────────────────────────────────
   const handlePreview = async (note: LectureNote) => {
     setSelectedNote(note);
     setPreviewDialogOpen(true);
     setPreviewLoading(true);
     setPreviewUrl(null);
-
     try {
-      // Fetch the file as a blob with authorization header
       const response = await fetch(`${apiUrl}/notes/${note._id}/preview`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to load preview");
-      }
-
-      // Create a blob URL for the iframe
+      if (!response.ok) throw new Error("Failed to load preview");
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      setPreviewUrl(url);
+      setPreviewUrl(URL.createObjectURL(blob));
     } catch (error) {
-      console.error("[v0] Preview error:", error);
+      console.error("[notes] Preview error:", error);
       toast.error("Failed to load preview");
     } finally {
       setPreviewLoading(false);
     }
   };
 
+  // ─── Download ───────────────────────────────────────────────────────────────
   const handleDownload = async (noteId: string, originalName: string) => {
     try {
-      // Call the download endpoint to increment count and get file URL
       const response = await fetch(`${apiUrl}/notes/${noteId}/download`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await response.json();
-      console.log("[v0] Download response:", data);
-
       if (data.success) {
-        // Use the fileUrl from the API response
-        const downloadUrl = data.data.fileUrl;
         const link = document.createElement("a");
-        link.href = downloadUrl;
+        link.href = data.data.fileUrl;
         link.download = data.data.filename || originalName;
         link.target = "_blank";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
         toast.success("Download started");
-        fetchNotes(); // Refresh to update download count
+        fetchNotes();
       } else {
         throw new Error(data.message);
       }
     } catch (error) {
       toast.error("Failed to download file");
-      console.error("[v0] Download error:", error);
+      console.error("[notes] Download error:", error);
     }
   };
 
+  // ─── AI: Summarise ───────────────────────────────────────────────────────────
   const handleSummarize = async (note: LectureNote) => {
     setSelectedNote(note);
     setAiDialogOpen(true);
-
     if (note.aiSummary) {
       setAiSummary(note.aiSummary);
       return;
     }
-
     try {
       setAiLoading(true);
       setAiSummary("");
-
       const response = await fetch(`${apiUrl}/ai/summarize-note/${note._id}`, {
         method: "POST",
         headers: {
@@ -253,45 +249,38 @@ function StudentsViewLectureNotes() {
           "Content-Type": "application/json",
         },
       });
-
       const data = await response.json();
       if (data.success) {
         setAiSummary(data.data.summary);
         toast.success("Summary generated successfully");
-        fetchNotes(); // Refresh to get updated note with summary
+        fetchNotes();
       } else {
         throw new Error(data.message);
       }
     } catch (error) {
       toast.error("Failed to generate summary");
-      console.error("[v0] Summary error:", error);
     } finally {
       setAiLoading(false);
     }
   };
 
+  // ─── AI: Ask question ────────────────────────────────────────────────────────
   const handleAskQuestion = async () => {
     if (!question.trim()) {
       toast.error("Please enter a question");
       return;
     }
-
     try {
       setAiLoading(true);
       setAnswer("");
-
       const response = await fetch(`${apiUrl}/ai/answer-question`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          question,
-          lectureNoteId: selectedNote?._id,
-        }),
+        body: JSON.stringify({ question, lectureNoteId: selectedNote?._id }),
       });
-
       const data = await response.json();
       if (data.success) {
         setAnswer(data.data.answer);
@@ -301,34 +290,28 @@ function StudentsViewLectureNotes() {
       }
     } catch (error) {
       toast.error("Failed to get answer");
-      console.error("[v0] Question error:", error);
     } finally {
       setAiLoading(false);
     }
   };
 
+  // ─── AI: Explain concept ─────────────────────────────────────────────────────
   const handleExplainConcept = async () => {
     if (!concept.trim()) {
       toast.error("Please enter a concept");
       return;
     }
-
     try {
       setAiLoading(true);
       setExplanation("");
-
       const response = await fetch(`${apiUrl}/ai/explain-concept`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          concept,
-          level: "Undergraduate",
-        }),
+        body: JSON.stringify({ concept, level: "Undergraduate" }),
       });
-
       const data = await response.json();
       if (data.success) {
         setExplanation(data.data.explanation);
@@ -338,12 +321,12 @@ function StudentsViewLectureNotes() {
       }
     } catch (error) {
       toast.error("Failed to explain concept");
-      console.error("[v0] Explain error:", error);
     } finally {
       setAiLoading(false);
     }
   };
 
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
@@ -352,267 +335,254 @@ function StudentsViewLectureNotes() {
     return `${Math.round((bytes / Math.pow(k, i)) * 100) / 100} ${sizes[i]}`;
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
     });
+
+  const toggleCourse = (code: string) => {
+    setExpandedCourses((prev) => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
   };
 
-  // Get unique values for filters
-  const faculties = [...new Set(notes.map((note) => note.faculty))];
-  const programs = [...new Set(notes.map((note) => note.program))];
-  const years = [...new Set(notes.map((note) => note.yearOfStudy))].sort();
-
+  // Client-side keyword search applied on top of the already-filtered notes
   const filteredNotes = notes.filter(
     (note) =>
       note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       note.course.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.courseCode.toLowerCase().includes(searchQuery.toLowerCase()),
+      note.courseCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (note.description || "")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase()),
   );
 
+  // Group filtered notes by courseCode for organised display
+  const notesByCourse = filteredNotes.reduce<Record<string, LectureNote[]>>(
+    (acc, note) => {
+      const key = note.courseCode;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(note);
+      return acc;
+    },
+    {},
+  );
+
+  const uniqueCourseCodes = Object.keys(notesByCourse).sort();
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
       <div className="space-y-6 p-6 max-w-7xl mx-auto">
+        {/* ── Page header ── */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Lecture Notes</h1>
           <p className="text-muted-foreground">
-            Access and study lecture materials for your courses
+            Study materials for your enrolled courses
           </p>
         </div>
 
-        {/* Search Bar */}
-        <div className="flex flex-col gap-4 sm:flex-row">
+        {/* ── Enrollment context banner ── */}
+        {enrollment && (
+          <Card className="border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-800">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <GraduationCap className="size-5 text-green-700 dark:text-green-400 shrink-0" />
+                <span className="text-sm font-semibold text-green-900 dark:text-green-300">
+                  Showing notes for your enrollment:
+                </span>
+                <Badge
+                  variant="outline"
+                  className="border-green-400 text-green-800 dark:text-green-300"
+                >
+                  {enrollment.faculty}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="border-green-400 text-green-800 dark:text-green-300"
+                >
+                  {enrollment.program}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="border-green-400 text-green-800 dark:text-green-300"
+                >
+                  Year {enrollment.yearOfStudy}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Enrollment error banner ── */}
+        {enrollmentError && (
+          <Card className="border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-800">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="size-5 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-300">
+                    Enrollment information missing
+                  </p>
+                  <p className="text-sm text-red-700 dark:text-red-400 mt-0.5">
+                    {enrollmentError}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Search & course-code filter ── */}
+        <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by title, course, or course code..."
+              placeholder="Search notes by title, course, or description..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               className="pl-10"
             />
           </div>
+          <div className="relative sm:w-56">
+            <BookMarked className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Filter by course code..."
+              value={courseCodeFilter}
+              onChange={(e) => setCourseCodeFilter(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && fetchNotes()}
+              className="pl-10"
+            />
+          </div>
+          {(searchQuery || courseCodeFilter) && (
+            <Button variant="ghost" onClick={handleClearFilters} size="icon">
+              <X className="size-4" />
+            </Button>
+          )}
           <Button onClick={handleSearch}>Search</Button>
         </div>
 
-        {/* Filters */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="size-5" />
-              Filters
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-4">
-              <div className="flex-1 min-w-50">
-                <Label className="text-sm mb-1.5 block">Faculty</Label>
-                <Select value={facultyFilter} onValueChange={setFacultyFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Faculties" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Faculties</SelectItem>
-                    {faculties.map((faculty) => (
-                      <SelectItem key={faculty} value={faculty}>
-                        {faculty}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1 min-w-50">
-                <Label className="text-sm mb-1.5 block">Program</Label>
-                <Select value={programFilter} onValueChange={setProgramFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Programs" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Programs</SelectItem>
-                    {programs.map((program) => (
-                      <SelectItem key={program} value={program}>
-                        {program}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1 min-w-37.5">
-                <Label className="text-sm mb-1.5 block">Year of Study</Label>
-                <Select value={yearFilter} onValueChange={setYearFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Years" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Years</SelectItem>
-                    {years.map((year) => (
-                      <SelectItem key={year} value={String(year)}>
-                        Year {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {(facultyFilter ||
-                programFilter ||
-                yearFilter ||
-                searchQuery) && (
-                <div className="flex items-end">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearFilters}
-                  >
-                    <X className="size-4 mr-1" />
-                    Clear
-                  </Button>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* AI Features Info */}
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-2">
+        {/* ── AI info strip ── */}
+        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-2 mb-1">
               <Sparkles className="size-5 text-blue-600" />
-              <h3 className="font-semibold text-blue-900">
+              <span className="font-semibold text-blue-900 dark:text-blue-300 text-sm">
                 AI-Powered Study Tools
-              </h3>
+              </span>
             </div>
-            <p className="text-sm text-blue-800">
-              Use AI to summarize notes, ask questions about lecture content,
-              and get concepts explained in simple terms!
+            <p className="text-sm text-blue-800 dark:text-blue-400">
+              Summarise notes, ask questions about lecture content, and get
+              concepts explained in simple terms!
             </p>
           </CardContent>
         </Card>
 
-        {/* Notes Grid */}
+        {/* ── Main content ── */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-16">
             <Loader2 className="size-8 animate-spin text-muted-foreground" />
           </div>
-        ) : filteredNotes.length === 0 ? (
+        ) : enrollmentError ? null : filteredNotes.length === 0 ? (
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
+            <CardContent className="flex flex-col items-center justify-center py-14">
               <FileText className="size-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground text-center">
-                No lecture notes found. Try adjusting your search or filters.
+              <p className="text-muted-foreground text-center font-medium">
+                {searchQuery || courseCodeFilter
+                  ? "No notes match your search."
+                  : "No lecture notes have been uploaded for your courses yet."}
               </p>
+              {(searchQuery || courseCodeFilter) && (
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={handleClearFilters}
+                >
+                  Clear filters
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              Showing {filteredNotes.length} lecture note
-              {filteredNotes.length !== 1 ? "s" : ""}
+              {filteredNotes.length} note
+              {filteredNotes.length !== 1 ? "s" : ""} across{" "}
+              {uniqueCourseCodes.length} course
+              {uniqueCourseCodes.length !== 1 ? "s" : ""}
             </p>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {filteredNotes.map((note) => (
-                <Card
-                  key={note._id}
-                  className="hover:shadow-lg transition-shadow"
-                >
-                  <CardHeader>
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <FileText className="size-4" />
-                        <Badge variant="secondary">
-                          {note.fileType.toUpperCase()}
-                        </Badge>
+
+            {/* ── Grouped by course code ── */}
+            <div className="space-y-4">
+              {uniqueCourseCodes.map((code) => {
+                const courseNotes = notesByCourse[code];
+                const isExpanded = expandedCourses.has(code);
+                const courseName = courseNotes[0]?.course ?? code;
+
+                return (
+                  <div
+                    key={code}
+                    className="border rounded-xl overflow-hidden bg-card"
+                  >
+                    {/* Course group header */}
+                    <button
+                      onClick={() => toggleCourse(code)}
+                      className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/50 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <BookMarked className="size-5 text-primary shrink-0" />
+                        <div>
+                          <p className="font-semibold text-foreground">
+                            {courseName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {code} &middot; {courseNotes.length} note
+                            {courseNotes.length !== 1 ? "s" : ""}
+                          </p>
+                        </div>
                       </div>
-                      {note.aiSummary && (
-                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200">
-                          <Sparkles className="size-3 mr-1" />
-                          AI
-                        </Badge>
+                      {isExpanded ? (
+                        <ChevronUp className="size-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="size-4 text-muted-foreground" />
                       )}
-                    </div>
-                    <CardTitle className="line-clamp-2">{note.title}</CardTitle>
-                    <CardDescription>
-                      <span className="font-medium">{note.course}</span> (
-                      {note.courseCode})
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {note.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {note.description}
-                      </p>
-                    )}
+                    </button>
 
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant="outline" className="text-xs">
-                        {note.faculty}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {note.program}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        Year {note.yearOfStudy}
-                      </Badge>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>
-                        By {note.uploadedBy?.firstName || "Unknown"}{" "}
-                        {note.uploadedBy?.lastName || ""}
-                      </span>
-                      <span>{formatFileSize(note.fileSize)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <div className="flex items-center gap-4">
-                        <span className="flex items-center gap-1">
-                          <Eye className="size-3" /> {note.views}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Download className="size-3" /> {note.downloads}
-                        </span>
+                    {/* Note cards */}
+                    {isExpanded && (
+                      <div className="p-4 pt-0 grid gap-4 md:grid-cols-2 lg:grid-cols-3 border-t">
+                        {courseNotes.map((note) => (
+                          <NoteCard
+                            key={note._id}
+                            note={note}
+                            onPreview={handlePreview}
+                            onDownload={handleDownload}
+                            onSummarise={handleSummarize}
+                            onView={(n) => {
+                              setSelectedNote(n);
+                              setViewDialogOpen(true);
+                            }}
+                            formatFileSize={formatFileSize}
+                            formatDate={formatDate}
+                          />
+                        ))}
                       </div>
-                      <span>{formatDate(note.createdAt)}</span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handlePreview(note)}
-                      >
-                        <Eye className="size-4 mr-1" />
-                        Preview
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          handleDownload(note._id, note.originalName)
-                        }
-                      >
-                        <Download className="size-4 mr-1" />
-                        Download
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-blue-600 border-blue-300 hover:bg-blue-50 bg-transparent"
-                        onClick={() => handleSummarize(note)}
-                      >
-                        <Sparkles className="size-4 mr-1" />
-                        AI Summary
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
 
-        {/* Preview Dialog */}
+        {/* ════════════════════════ DIALOGS ════════════════════════ */}
+
+        {/* Preview */}
         <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
           <DialogContent className="max-w-5xl h-[90vh]">
             <DialogHeader>
@@ -621,11 +591,10 @@ function StudentsViewLectureNotes() {
                 {selectedNote?.title}
               </DialogTitle>
               <DialogDescription>
-                {selectedNote?.course} ({selectedNote?.courseCode}) -{" "}
+                {selectedNote?.course} ({selectedNote?.courseCode}) &mdash;{" "}
                 {selectedNote?.originalName}
               </DialogDescription>
             </DialogHeader>
-
             {selectedNote && (
               <div className="flex-1 h-full min-h-0">
                 {previewLoading ? (
@@ -646,19 +615,17 @@ function StudentsViewLectureNotes() {
                         ? "Loading preview..."
                         : `Preview not available for ${selectedNote.fileType.toUpperCase()} files`}
                     </p>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() =>
-                          handleDownload(
-                            selectedNote._id,
-                            selectedNote.originalName,
-                          )
-                        }
-                      >
-                        <Download className="size-4 mr-2" />
-                        Download to View
-                      </Button>
-                    </div>
+                    <Button
+                      onClick={() =>
+                        handleDownload(
+                          selectedNote._id,
+                          selectedNote.originalName,
+                        )
+                      }
+                    >
+                      <Download className="size-4 mr-2" />
+                      Download to View
+                    </Button>
                   </div>
                 )}
               </div>
@@ -666,7 +633,7 @@ function StudentsViewLectureNotes() {
           </DialogContent>
         </Dialog>
 
-        {/* View Note Details Dialog */}
+        {/* View details */}
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
@@ -675,7 +642,6 @@ function StudentsViewLectureNotes() {
                 {selectedNote?.course} ({selectedNote?.courseCode})
               </DialogDescription>
             </DialogHeader>
-
             {selectedNote && (
               <div className="space-y-4">
                 <div>
@@ -684,7 +650,6 @@ function StudentsViewLectureNotes() {
                     {selectedNote.description || "No description provided"}
                   </p>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm font-semibold">Faculty</Label>
@@ -709,7 +674,6 @@ function StudentsViewLectureNotes() {
                     </p>
                   </div>
                 </div>
-
                 <div>
                   <Label className="text-sm font-semibold">Uploaded By</Label>
                   <p className="text-sm mt-1">
@@ -718,20 +682,18 @@ function StudentsViewLectureNotes() {
                     {selectedNote.uploadedBy?.role || "N/A"})
                   </p>
                 </div>
-
                 {selectedNote.tags && selectedNote.tags.length > 0 && (
                   <div>
                     <Label className="text-sm font-semibold">Tags</Label>
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {selectedNote.tags.map((tag, index) => (
-                        <Badge key={index} variant="secondary">
+                      {selectedNote.tags.map((tag, i) => (
+                        <Badge key={i} variant="secondary">
                           {tag}
                         </Badge>
                       ))}
                     </div>
                   </div>
                 )}
-
                 <div className="flex flex-wrap gap-2 pt-4">
                   <Button onClick={() => handlePreview(selectedNote)}>
                     <Eye className="size-4 mr-2" />
@@ -747,7 +709,7 @@ function StudentsViewLectureNotes() {
                     }
                   >
                     <Download className="size-4 mr-2" />
-                    Download File
+                    Download
                   </Button>
                   <Button
                     variant="outline"
@@ -787,7 +749,7 @@ function StudentsViewLectureNotes() {
           </DialogContent>
         </Dialog>
 
-        {/* AI Summary Dialog */}
+        {/* AI Summary */}
         <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
@@ -797,7 +759,6 @@ function StudentsViewLectureNotes() {
               </DialogTitle>
               <DialogDescription>{selectedNote?.title}</DialogDescription>
             </DialogHeader>
-
             {aiLoading ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <Loader2 className="size-8 animate-spin text-blue-600 mb-4" />
@@ -806,25 +767,20 @@ function StudentsViewLectureNotes() {
                 </p>
               </div>
             ) : aiSummary ? (
-              <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="prose prose-sm max-w-none">
-                    <p className="whitespace-pre-wrap text-blue-900">
-                      {aiSummary}
-                    </p>
-                  </div>
-                </div>
+              <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <p className="whitespace-pre-wrap text-blue-900 dark:text-blue-200 text-sm">
+                  {aiSummary}
+                </p>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">
-                No summary available yet. Click "Generate Summary" to create
-                one.
+                No summary available yet.
               </p>
             )}
           </DialogContent>
         </Dialog>
 
-        {/* Ask Question Dialog */}
+        {/* Ask Question */}
         <Dialog open={questionDialogOpen} onOpenChange={setQuestionDialogOpen}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
@@ -836,7 +792,6 @@ function StudentsViewLectureNotes() {
                 Get AI-powered answers about {selectedNote?.title}
               </DialogDescription>
             </DialogHeader>
-
             <div className="space-y-4">
               <div>
                 <Label>Your Question</Label>
@@ -847,7 +802,6 @@ function StudentsViewLectureNotes() {
                   rows={3}
                 />
               </div>
-
               <Button
                 onClick={handleAskQuestion}
                 disabled={aiLoading || !question.trim()}
@@ -865,24 +819,21 @@ function StudentsViewLectureNotes() {
                   </>
                 )}
               </Button>
-
               {answer && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
-                  <Label className="text-green-900 font-semibold">
+                <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                  <Label className="text-green-900 dark:text-green-300 font-semibold">
                     Answer:
                   </Label>
-                  <div className="prose prose-sm max-w-none mt-2">
-                    <p className="whitespace-pre-wrap text-green-900">
-                      {answer}
-                    </p>
-                  </div>
+                  <p className="whitespace-pre-wrap text-green-900 dark:text-green-200 text-sm mt-2">
+                    {answer}
+                  </p>
                 </div>
               )}
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* Explain Concept Dialog */}
+        {/* Explain Concept */}
         <Dialog open={explainDialogOpen} onOpenChange={setExplainDialogOpen}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
@@ -894,7 +845,6 @@ function StudentsViewLectureNotes() {
                 Get simple explanations of complex concepts
               </DialogDescription>
             </DialogHeader>
-
             <div className="space-y-4">
               <div>
                 <Label>Concept to Explain</Label>
@@ -904,7 +854,6 @@ function StudentsViewLectureNotes() {
                   onChange={(e) => setConcept(e.target.value)}
                 />
               </div>
-
               <Button
                 onClick={handleExplainConcept}
                 disabled={aiLoading || !concept.trim()}
@@ -922,17 +871,14 @@ function StudentsViewLectureNotes() {
                   </>
                 )}
               </Button>
-
               {explanation && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mt-4">
-                  <Label className="text-purple-900 font-semibold">
+                <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                  <Label className="text-purple-900 dark:text-purple-300 font-semibold">
                     Explanation:
                   </Label>
-                  <div className="prose prose-sm max-w-none mt-2">
-                    <p className="whitespace-pre-wrap text-purple-900">
-                      {explanation}
-                    </p>
-                  </div>
+                  <p className="whitespace-pre-wrap text-purple-900 dark:text-purple-200 text-sm mt-2">
+                    {explanation}
+                  </p>
                 </div>
               )}
             </div>
@@ -940,6 +886,116 @@ function StudentsViewLectureNotes() {
         </Dialog>
       </div>
     </div>
+  );
+}
+
+// ─── Extracted NoteCard component ─────────────────────────────────────────────
+interface NoteCardProps {
+  note: LectureNote;
+  onPreview: (note: LectureNote) => void;
+  onDownload: (id: string, name: string) => void;
+  onSummarise: (note: LectureNote) => void;
+  onView: (note: LectureNote) => void;
+  formatFileSize: (b: number) => string;
+  formatDate: (d: string) => string;
+}
+
+function NoteCard({
+  note,
+  onPreview,
+  onDownload,
+  onSummarise,
+  onView,
+  formatFileSize,
+  formatDate,
+}: NoteCardProps) {
+  return (
+    <Card className="flex flex-col hover:shadow-md transition-shadow mt-4">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <FileText className="size-4 text-muted-foreground" />
+            <Badge variant="secondary" className="text-xs">
+              {note.fileType.toUpperCase()}
+            </Badge>
+          </div>
+          {note.aiSummary && (
+            <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-xs">
+              <Sparkles className="size-3 mr-1" />
+              AI
+            </Badge>
+          )}
+        </div>
+        <CardTitle className="line-clamp-2 text-base mt-2">
+          {note.title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 space-y-3">
+        {note.description && (
+          <p className="text-sm text-muted-foreground line-clamp-2">
+            {note.description}
+          </p>
+        )}
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            {note.uploadedBy?.firstName || "Unknown"}{" "}
+            {note.uploadedBy?.lastName || ""}
+          </span>
+          <span>{formatFileSize(note.fileSize)}</span>
+        </div>
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <Eye className="size-3" /> {note.views}
+            </span>
+            <span className="flex items-center gap-1">
+              <Download className="size-3" /> {note.downloads}
+            </span>
+          </div>
+          <span>{formatDate(note.createdAt)}</span>
+        </div>
+
+        {note.tags && note.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {note.tags.map((tag, i) => (
+              <Badge key={i} variant="outline" className="text-xs">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        <div className="pt-2 flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => onView(note)}>
+            <Eye className="size-3 mr-1" />
+            Details
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onPreview(note)}>
+            <FileText className="size-3 mr-1" />
+            Preview
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onDownload(note._id, note.originalName)}
+          >
+            <Download className="size-3 mr-1" />
+            Download
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-blue-600 border-blue-300 hover:bg-blue-50 bg-transparent dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-950/30"
+            onClick={() => onSummarise(note)}
+          >
+            <Sparkles className="size-3 mr-1" />
+            AI
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

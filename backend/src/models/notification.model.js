@@ -12,11 +12,18 @@ const notificationSchema = new mongoose.Schema(
       enum: [
         "lecture-reminder",
         "exam-reminder",
+        "exam",
         "assignment",
         "announcement",
         "chat",
         "voting",
         "general",
+        // file/upload types
+        "upload",
+        "room_upload",
+        // content types
+        "note",
+        "timetable",
       ],
       required: true,
     },
@@ -40,10 +47,15 @@ const notificationSchema = new mongoose.Schema(
         "Announcement",
         "ChatRoom",
         "Voting",
+        "Note",
       ],
     },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
     scheduledFor: {
-      type: Date, // For scheduled notifications like reminders
+      type: Date,
     },
     isRead: {
       type: Boolean,
@@ -56,10 +68,9 @@ const notificationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
-// Index for efficient querying
 notificationSchema.index({ user: 1, isRead: 1 });
 notificationSchema.index({ scheduledFor: 1, isSent: 1 });
 

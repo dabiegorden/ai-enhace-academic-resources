@@ -5,7 +5,16 @@ const setupSocketHandlers = (io) => {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
-    // Join chat room
+    // ─── Notification room ────────────────────────────────────────────────────
+    // The frontend calls socket.emit("join", `user-${userId}`) after connecting.
+    // Without this handler the socket never enters the room, so
+    // io.to(`user-${uid}`).emit("notification:new", …) is sent to nobody.
+    socket.on("join", (room) => {
+      socket.join(room);
+      console.log(`Socket ${socket.id} joined notification room: ${room}`);
+    });
+
+    // ─── Chat rooms ───────────────────────────────────────────────────────────
     socket.on("join-room", async (data) => {
       try {
         const { roomId, userId } = data;
@@ -13,19 +22,16 @@ const setupSocketHandlers = (io) => {
         socket.join(roomId);
         console.log(`User ${userId} joined room ${roomId}`);
 
-        // Get user info
         const user = await User.findById(userId).select(
-          "firstName lastName profileImage"
+          "firstName lastName profileImage",
         );
 
-        // Broadcast to room
         socket.to(roomId).emit("user-joined", {
           userId,
           userName: `${user.firstName} ${user.lastName}`,
           profileImage: user.profileImage,
         });
 
-        // Send room info to user
         const chatRoom = await ChatRoom.findById(roomId)
           .select("-messages")
           .populate("members", "firstName lastName profileImage");
@@ -37,7 +43,6 @@ const setupSocketHandlers = (io) => {
       }
     });
 
-    // Leave chat room
     socket.on("leave-room", async (data) => {
       try {
         const { roomId, userId } = data;
@@ -47,7 +52,6 @@ const setupSocketHandlers = (io) => {
 
         const user = await User.findById(userId).select("firstName lastName");
 
-        // Broadcast to room
         socket.to(roomId).emit("user-left", {
           userId,
           userName: `${user.firstName} ${user.lastName}`,
@@ -57,17 +61,11 @@ const setupSocketHandlers = (io) => {
       }
     });
 
-    // Typing indicator
     socket.on("typing", (data) => {
       const { roomId, userId, userName, isTyping } = data;
-      socket.to(roomId).emit("user-typing", {
-        userId,
-        userName,
-        isTyping,
-      });
+      socket.to(roomId).emit("user-typing", { userId, userName, isTyping });
     });
 
-    // Message reactions (future feature)
     socket.on("message-reaction", async (data) => {
       const { roomId, messageId, reaction } = data;
       socket.to(roomId).emit("message-reacted", {
@@ -77,7 +75,6 @@ const setupSocketHandlers = (io) => {
       });
     });
 
-    // Disconnect
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.id);
     });

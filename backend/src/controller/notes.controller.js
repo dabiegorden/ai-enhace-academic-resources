@@ -43,12 +43,10 @@ export const uploadLectureNote = async (req, res) => {
         );
         if (fs.existsSync(fp)) fs.unlinkSync(fp);
       }
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Please provide all required fields",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Please provide all required fields",
+      });
     }
     const fileExtension = path
       .extname(req.file.originalname)
@@ -101,13 +99,11 @@ export const uploadLectureNote = async (req, res) => {
       });
     }
 
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Lecture note uploaded successfully",
-        data: lectureNote,
-      });
+    res.status(201).json({
+      success: true,
+      message: "Lecture note uploaded successfully",
+      data: lectureNote,
+    });
   } catch (error) {
     if (req.file) {
       const fp = path.join(
@@ -193,6 +189,22 @@ export const getLectureNoteById = async (req, res) => {
         success: false,
         message: "Lecture note not found",
       });
+    }
+
+    // Students can only access notes that match their enrolled program
+    if (req.user.role === "student") {
+      const isEnrolled =
+        lectureNote.faculty === req.user.faculty &&
+        lectureNote.program === req.user.program &&
+        lectureNote.yearOfStudy === req.user.yearOfStudy;
+
+      if (!isEnrolled) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Access denied. This lecture note is not for your enrolled program.",
+        });
+      }
     }
 
     // Increment views
@@ -348,6 +360,22 @@ export const downloadLectureNote = async (req, res) => {
       });
     }
 
+    // Students can only download notes that match their enrolled program
+    if (req.user.role === "student") {
+      const isEnrolled =
+        lectureNote.faculty === req.user.faculty &&
+        lectureNote.program === req.user.program &&
+        lectureNote.yearOfStudy === req.user.yearOfStudy;
+
+      if (!isEnrolled) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Access denied. This lecture note is not for your enrolled program.",
+        });
+      }
+    }
+
     if (!lectureNote.filename) {
       return res.status(404).json({
         success: false,
@@ -373,7 +401,6 @@ export const downloadLectureNote = async (req, res) => {
     await lectureNote.save();
 
     // Return the file URL instead of streaming
-    // Construct the URL to access the file via the static middleware
     const fileUrl = `${req.protocol}://${req.get("host")}/uploads/assignments/${lectureNote.filename}`;
 
     res.status(200).json({
@@ -405,6 +432,22 @@ export const previewLectureNote = async (req, res) => {
         success: false,
         message: "Lecture note not found",
       });
+    }
+
+    // Students can only preview notes that match their enrolled program
+    if (req.user.role === "student") {
+      const isEnrolled =
+        lectureNote.faculty === req.user.faculty &&
+        lectureNote.program === req.user.program &&
+        lectureNote.yearOfStudy === req.user.yearOfStudy;
+
+      if (!isEnrolled) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Access denied. This lecture note is not for your enrolled program.",
+        });
+      }
     }
 
     if (!lectureNote.filename) {
@@ -461,7 +504,7 @@ export const previewLectureNote = async (req, res) => {
   }
 };
 
-// @desc    Get lecture notes by program (for students)
+// @desc    Get lecture notes for enrolled students (strict course-specific filtering)
 // @route   GET /api/notes/my-notes
 // @access  Private (Student)
 export const getMyLectureNotes = async (req, res) => {
@@ -473,21 +516,37 @@ export const getMyLectureNotes = async (req, res) => {
       });
     }
 
-    const { course, search, page = 1, limit = 20 } = req.query;
+    // Ensure the student has enrollment data on their profile
+    if (!req.user.faculty || !req.user.program || !req.user.yearOfStudy) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Your enrollment details (faculty, program, year of study) are incomplete. Please contact an administrator.",
+      });
+    }
 
+    const { courseCode, search, page = 1, limit = 20 } = req.query;
+
+    // Base query: strictly match student's enrolled faculty, program, and year
     const query = {
       faculty: req.user.faculty,
       program: req.user.program,
       yearOfStudy: req.user.yearOfStudy,
     };
 
-    if (course) query.course = { $regex: course, $options: "i" };
+    // Optional: further filter by a specific course code within their program
+    if (courseCode) {
+      query.courseCode = { $regex: courseCode, $options: "i" };
+    }
+
+    // Optional: keyword search within their already-filtered notes
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: "i" } },
         { description: { $regex: search, $options: "i" } },
         { course: { $regex: search, $options: "i" } },
         { courseCode: { $regex: search, $options: "i" } },
+        { tags: { $in: [new RegExp(search, "i")] } },
       ];
     }
 
@@ -501,12 +560,18 @@ export const getMyLectureNotes = async (req, res) => {
 
     const total = await LectureNote.countDocuments(query);
 
+    // Return enrollment context so the frontend can display it
     res.status(200).json({
       success: true,
       count: lectureNotes.length,
       total,
       page: Number.parseInt(page),
       pages: Math.ceil(total / Number.parseInt(limit)),
+      enrollment: {
+        faculty: req.user.faculty,
+        program: req.user.program,
+        yearOfStudy: req.user.yearOfStudy,
+      },
       data: lectureNotes,
     });
   } catch (error) {
