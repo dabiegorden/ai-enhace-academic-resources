@@ -26,7 +26,7 @@ export function StudentSidebar() {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-linear-to-r from-blue-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg">
             <Image
-              src="/assets/cuglogo.png"
+              src="/assets/cug.jpg"
               alt="CUG"
               width={32}
               height={32}

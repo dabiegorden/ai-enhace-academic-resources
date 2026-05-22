@@ -147,7 +147,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
                   >
                     <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-orange-500 rounded-full flex items-center justify-center">
                       <Image
-                        src="/assets/cuglogo.png"
+                        src="/assets/cug.jpg"
                         alt="CUG SmartLearn"
                         width={40}
                         height={40}
