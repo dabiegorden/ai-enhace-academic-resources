@@ -7,6 +7,8 @@ import {
   generateExamQuestions,
   getStudySuggestions,
   explainConcept,
+  getNoteRecommendations,
+  generateNoteQuiz,
 } from "../controller/ai.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
 
@@ -33,5 +35,8 @@ router.post(
   getStudySuggestions,
 );
 router.post("/explain-concept", protect, explainConcept);
+router.post("/generate-quiz/:id", protect, generateNoteQuiz);
+
+router.post("/note-recommendations/:id", protect, getNoteRecommendations);
 
 export default router;

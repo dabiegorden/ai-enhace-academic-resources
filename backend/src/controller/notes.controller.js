@@ -8,15 +8,31 @@ import User from "../models/User.model.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// @desc    Upload lecture note
-// @route   POST /api/notes
-// @access  Private (Lecturer/Admin)
+// ─── Allowed file types (single source of truth for controller-level checks) ──
+const ALLOWED_FILE_TYPES = new Set([
+  "pdf",
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+]);
+
+// ─── Helper: derive and validate file extension ───────────────────────────────
+const getFileExtension = (filename) =>
+  path.extname(filename).slice(1).toLowerCase();
+
+// ─── Upload lecture note ──────────────────────────────────────────────────────
+// @route  POST /api/notes
+// @access Private (Lecturer / Admin)
 export const uploadLectureNote = async (req, res) => {
   try {
-    if (!req.file)
+    if (!req.file) {
       return res
         .status(400)
         .json({ success: false, message: "Please upload a file" });
+    }
+
     const {
       title,
       description,
@@ -27,6 +43,7 @@ export const uploadLectureNote = async (req, res) => {
       yearOfStudy,
       tags,
     } = req.body;
+
     if (
       !title ||
       !course ||
@@ -35,23 +52,31 @@ export const uploadLectureNote = async (req, res) => {
       !program ||
       !yearOfStudy
     ) {
-      if (req.file) {
-        const fp = path.join(
-          __dirname,
-          "../public/uploads/assignments",
-          req.file.filename,
-        );
-        if (fs.existsSync(fp)) fs.unlinkSync(fp);
-      }
+      // Clean up orphaned file before responding
+      const fp = path.join(assignmentsDir, req.file.filename);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+
       return res.status(400).json({
         success: false,
         message: "Please provide all required fields",
       });
     }
-    const fileExtension = path
-      .extname(req.file.originalname)
-      .slice(1)
-      .toLowerCase();
+
+    const fileExtension = getFileExtension(req.file.originalname);
+
+    // Double-check extension against the allowed set (belt-and-suspenders guard
+    // on top of the multer filter)
+    if (!ALLOWED_FILE_TYPES.has(fileExtension)) {
+      const fp = path.join(assignmentsDir, req.file.filename);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid file type. Lecture notes only accept PDF and image files (jpg, jpeg, png, webp, gif).",
+      });
+    }
+
     const lectureNote = await LectureNote.create({
       title,
       description,
@@ -67,11 +92,13 @@ export const uploadLectureNote = async (req, res) => {
       uploadedBy: req.user.id,
       tags: tags ? JSON.parse(tags) : [],
     });
+
     await lectureNote.populate("uploadedBy", "firstName lastName email");
 
     // Notify matching students
     const io = req.app.get("io");
-    const uploaderName = req.user.firstName + " " + req.user.lastName;
+    const uploaderName = `${req.user.firstName} ${req.user.lastName}`;
+
     const students = await User.find({
       role: "student",
       faculty,
@@ -79,19 +106,15 @@ export const uploadLectureNote = async (req, res) => {
       yearOfStudy: parseInt(yearOfStudy),
       isActive: true,
     }).select("_id");
+
     const studentIds = students.map((s) => s._id.toString());
+
     if (studentIds.length > 0) {
       await broadcastNotification({
         userId: studentIds,
         type: "note",
-        title: "📄 New Lecture Note: " + title,
-        message:
-          uploaderName +
-          " uploaded a new note for " +
-          course +
-          " (" +
-          courseCode +
-          ")",
+        title: `📄 New Lecture Note: ${title}`,
+        message: `${uploaderName} uploaded a new note for ${course} (${courseCode})`,
         relatedId: lectureNote._id,
         relatedModel: "LectureNote",
         metadata: { course, courseCode, fileType: fileExtension },
@@ -105,21 +128,18 @@ export const uploadLectureNote = async (req, res) => {
       data: lectureNote,
     });
   } catch (error) {
+    // Clean up file if Mongoose save fails
     if (req.file) {
-      const fp = path.join(
-        __dirname,
-        "../public/uploads/assignments",
-        req.file.filename,
-      );
+      const fp = path.join(assignmentsDir, req.file.filename);
       if (fs.existsSync(fp)) fs.unlinkSync(fp);
     }
     res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get all lecture notes with filters
-// @route   GET /api/notes
-// @access  Private
+// ─── Get all lecture notes with filters ──────────────────────────────────────
+// @route  GET /api/notes
+// @access Private
 export const getAllLectureNotes = async (req, res) => {
   try {
     const {
@@ -133,10 +153,9 @@ export const getAllLectureNotes = async (req, res) => {
     } = req.query;
 
     const query = {};
-
     if (faculty) query.faculty = faculty;
     if (program) query.program = program;
-    if (yearOfStudy) query.yearOfStudy = Number.parseInt(yearOfStudy);
+    if (yearOfStudy) query.yearOfStudy = parseInt(yearOfStudy);
     if (course) query.course = { $regex: course, $options: "i" };
     if (search) {
       query.$or = [
@@ -148,13 +167,13 @@ export const getAllLectureNotes = async (req, res) => {
       ];
     }
 
-    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const lectureNotes = await LectureNote.find(query)
       .populate("uploadedBy", "firstName lastName email role")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(Number.parseInt(limit));
+      .limit(parseInt(limit));
 
     const total = await LectureNote.countDocuments(query);
 
@@ -162,21 +181,18 @@ export const getAllLectureNotes = async (req, res) => {
       success: true,
       count: lectureNotes.length,
       total,
-      page: Number.parseInt(page),
-      pages: Math.ceil(total / Number.parseInt(limit)),
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
       data: lectureNotes,
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get lecture note by ID
-// @route   GET /api/notes/:id
-// @access  Private
+// ─── Get lecture note by ID ───────────────────────────────────────────────────
+// @route  GET /api/notes/:id
+// @access Private
 export const getLectureNoteById = async (req, res) => {
   try {
     const lectureNote = await LectureNote.findById(req.params.id).populate(
@@ -185,13 +201,11 @@ export const getLectureNoteById = async (req, res) => {
     );
 
     if (!lectureNote) {
-      return res.status(404).json({
-        success: false,
-        message: "Lecture note not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lecture note not found" });
     }
 
-    // Students can only access notes that match their enrolled program
     if (req.user.role === "student") {
       const isEnrolled =
         lectureNote.faculty === req.user.faculty &&
@@ -207,37 +221,28 @@ export const getLectureNoteById = async (req, res) => {
       }
     }
 
-    // Increment views
     lectureNote.views += 1;
     await lectureNote.save();
 
-    res.status(200).json({
-      success: true,
-      data: lectureNote,
-    });
+    res.status(200).json({ success: true, data: lectureNote });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Update lecture note
-// @route   PUT /api/notes/:id
-// @access  Private (Owner/Admin)
+// ─── Update lecture note ──────────────────────────────────────────────────────
+// @route  PUT /api/notes/:id
+// @access Private (Owner / Admin)
 export const updateLectureNote = async (req, res) => {
   try {
     let lectureNote = await LectureNote.findById(req.params.id);
 
     if (!lectureNote) {
-      return res.status(404).json({
-        success: false,
-        message: "Lecture note not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lecture note not found" });
     }
 
-    // Check if user is owner or admin
     if (
       lectureNote.uploadedBy.toString() !== req.user.id &&
       req.user.role !== "admin"
@@ -261,21 +266,18 @@ export const updateLectureNote = async (req, res) => {
 
     const updateData = {};
     if (title) updateData.title = title;
-    if (description) updateData.description = description;
+    if (description !== undefined) updateData.description = description;
     if (course) updateData.course = course;
     if (courseCode) updateData.courseCode = courseCode;
     if (faculty) updateData.faculty = faculty;
     if (program) updateData.program = program;
-    if (yearOfStudy) updateData.yearOfStudy = Number.parseInt(yearOfStudy);
+    if (yearOfStudy) updateData.yearOfStudy = parseInt(yearOfStudy);
     if (tags) updateData.tags = tags;
 
     lectureNote = await LectureNote.findByIdAndUpdate(
       req.params.id,
       updateData,
-      {
-        new: true,
-        runValidators: true,
-      },
+      { new: true, runValidators: true },
     ).populate("uploadedBy", "firstName lastName email");
 
     res.status(200).json({
@@ -284,28 +286,23 @@ export const updateLectureNote = async (req, res) => {
       data: lectureNote,
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Delete lecture note
-// @route   DELETE /api/notes/:id
-// @access  Private (Owner/Admin)
+// ─── Delete lecture note ──────────────────────────────────────────────────────
+// @route  DELETE /api/notes/:id
+// @access Private (Owner / Admin)
 export const deleteLectureNote = async (req, res) => {
   try {
     const lectureNote = await LectureNote.findById(req.params.id);
 
     if (!lectureNote) {
-      return res.status(404).json({
-        success: false,
-        message: "Lecture note not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lecture note not found" });
     }
 
-    // Check if user is owner or admin
     if (
       lectureNote.uploadedBy.toString() !== req.user.id &&
       req.user.role !== "admin"
@@ -316,17 +313,9 @@ export const deleteLectureNote = async (req, res) => {
       });
     }
 
-    // Delete file from local storage using filename
     if (lectureNote.filename) {
-      const filePath = path.join(
-        __dirname,
-        "../public/uploads/assignments",
-        lectureNote.filename,
-      );
-
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
+      const filePath = path.join(assignmentsDir, lectureNote.filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
 
     await lectureNote.deleteOne();
@@ -336,16 +325,13 @@ export const deleteLectureNote = async (req, res) => {
       message: "Lecture note deleted successfully",
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Download lecture note (returns URL instead of streaming)
-// @route   GET /api/notes/:id/download
-// @access  Private
+// ─── Download lecture note ────────────────────────────────────────────────────
+// @route  GET /api/notes/:id/download
+// @access Private
 export const downloadLectureNote = async (req, res) => {
   try {
     const lectureNote = await LectureNote.findById(req.params.id).populate(
@@ -354,13 +340,11 @@ export const downloadLectureNote = async (req, res) => {
     );
 
     if (!lectureNote) {
-      return res.status(404).json({
-        success: false,
-        message: "Lecture note not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lecture note not found" });
     }
 
-    // Students can only download notes that match their enrolled program
     if (req.user.role === "student") {
       const isEnrolled =
         lectureNote.faculty === req.user.faculty &&
@@ -383,24 +367,16 @@ export const downloadLectureNote = async (req, res) => {
       });
     }
 
-    const filePath = path.join(
-      __dirname,
-      "../public/uploads/assignments",
-      lectureNote.filename,
-    );
-
+    const filePath = path.join(assignmentsDir, lectureNote.filename);
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        success: false,
-        message: "File not found on server",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "File not found on server" });
     }
 
-    // Increment downloads
     lectureNote.downloads += 1;
     await lectureNote.save();
 
-    // Return the file URL instead of streaming
     const fileUrl = `${req.protocol}://${req.get("host")}/uploads/assignments/${lectureNote.filename}`;
 
     res.status(200).json({
@@ -413,28 +389,23 @@ export const downloadLectureNote = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Preview lecture note (streams file for preview)
-// @route   GET /api/notes/:id/preview
-// @access  Private
+// ─── Preview lecture note ─────────────────────────────────────────────────────
+// @route  GET /api/notes/:id/preview
+// @access Private
 export const previewLectureNote = async (req, res) => {
   try {
     const lectureNote = await LectureNote.findById(req.params.id);
 
     if (!lectureNote) {
-      return res.status(404).json({
-        success: false,
-        message: "Lecture note not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lecture note not found" });
     }
 
-    // Students can only preview notes that match their enrolled program
     if (req.user.role === "student") {
       const isEnrolled =
         lectureNote.faculty === req.user.faculty &&
@@ -457,32 +428,23 @@ export const previewLectureNote = async (req, res) => {
       });
     }
 
-    const filePath = path.join(
-      __dirname,
-      "../public/uploads/assignments",
-      lectureNote.filename,
-    );
-
+    const filePath = path.join(assignmentsDir, lectureNote.filename);
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        success: false,
-        message: "File not found on server",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "File not found on server" });
     }
 
-    // Increment views
     lectureNote.views += 1;
     await lectureNote.save();
 
-    // Set content type based on file type
     const contentTypes = {
       pdf: "application/pdf",
-      doc: "application/msword",
-      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      ppt: "application/vnd.ms-powerpoint",
-      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      xls: "application/vnd.ms-excel",
-      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      gif: "image/gif",
     };
 
     const contentType =
@@ -494,19 +456,20 @@ export const previewLectureNote = async (req, res) => {
       `inline; filename="${lectureNote.originalName}"`,
     );
 
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+    fs.createReadStream(filePath).pipe(res);
+
+    console.log("Preview ID:", req.params.id);
+    console.log("Filename:", lectureNote.filename);
+    console.log("Resolved path:", filePath);
+    console.log("Exists:", fs.existsSync(filePath));
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get lecture notes for enrolled students (strict course-specific filtering)
-// @route   GET /api/notes/my-notes
-// @access  Private (Student)
+// ─── Get notes for enrolled student ──────────────────────────────────────────
+// @route  GET /api/notes/my-notes
+// @access Private (Student)
 export const getMyLectureNotes = async (req, res) => {
   try {
     if (req.user.role !== "student") {
@@ -516,7 +479,6 @@ export const getMyLectureNotes = async (req, res) => {
       });
     }
 
-    // Ensure the student has enrollment data on their profile
     if (!req.user.faculty || !req.user.program || !req.user.yearOfStudy) {
       return res.status(400).json({
         success: false,
@@ -527,19 +489,14 @@ export const getMyLectureNotes = async (req, res) => {
 
     const { courseCode, search, page = 1, limit = 20 } = req.query;
 
-    // Base query: strictly match student's enrolled faculty, program, and year
     const query = {
       faculty: req.user.faculty,
       program: req.user.program,
       yearOfStudy: req.user.yearOfStudy,
     };
 
-    // Optional: further filter by a specific course code within their program
-    if (courseCode) {
-      query.courseCode = { $regex: courseCode, $options: "i" };
-    }
+    if (courseCode) query.courseCode = { $regex: courseCode, $options: "i" };
 
-    // Optional: keyword search within their already-filtered notes
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: "i" } },
@@ -550,23 +507,22 @@ export const getMyLectureNotes = async (req, res) => {
       ];
     }
 
-    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const lectureNotes = await LectureNote.find(query)
       .populate("uploadedBy", "firstName lastName email")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(Number.parseInt(limit));
+      .limit(parseInt(limit));
 
     const total = await LectureNote.countDocuments(query);
 
-    // Return enrollment context so the frontend can display it
     res.status(200).json({
       success: true,
       count: lectureNotes.length,
       total,
-      page: Number.parseInt(page),
-      pages: Math.ceil(total / Number.parseInt(limit)),
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
       enrollment: {
         faculty: req.user.faculty,
         program: req.user.program,
@@ -575,20 +531,16 @@ export const getMyLectureNotes = async (req, res) => {
       data: lectureNotes,
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get my uploaded notes (for lecturers)
-// @route   GET /api/notes/uploaded-by-me
-// @access  Private (Lecturer)
+// ─── Get my uploaded notes (lecturer view) ───────────────────────────────────
+// @route  GET /api/notes/uploaded-by-me
+// @access Private (Lecturer)
 export const getMyUploadedNotes = async (req, res) => {
   try {
     const { page = 1, limit = 20, search } = req.query;
-
     const query = { uploadedBy: req.user.id };
 
     if (search) {
@@ -600,12 +552,12 @@ export const getMyUploadedNotes = async (req, res) => {
       ];
     }
 
-    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const lectureNotes = await LectureNote.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(Number.parseInt(limit));
+      .limit(parseInt(limit));
 
     const total = await LectureNote.countDocuments(query);
 
@@ -613,32 +565,24 @@ export const getMyUploadedNotes = async (req, res) => {
       success: true,
       count: lectureNotes.length,
       total,
-      page: Number.parseInt(page),
-      pages: Math.ceil(total / Number.parseInt(limit)),
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
       data: lectureNotes,
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get lecture note statistics
-// @route   GET /api/notes/stats
-// @access  Private (Admin)
+// ─── Stats (admin) ────────────────────────────────────────────────────────────
+// @route  GET /api/notes/stats
+// @access Private (Admin)
 export const getLectureNoteStats = async (req, res) => {
   try {
     const totalNotes = await LectureNote.countDocuments();
 
     const notesByFaculty = await LectureNote.aggregate([
-      {
-        $group: {
-          _id: "$faculty",
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: "$faculty", count: { $sum: 1 } } },
     ]);
 
     const notesByProgram = await LectureNote.aggregate([
@@ -657,17 +601,56 @@ export const getLectureNoteStats = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: {
-        totalNotes,
-        notesByFaculty,
-        notesByProgram,
-        topDownloadedNotes,
-      },
+      data: { totalNotes, notesByFaculty, notesByProgram, topDownloadedNotes },
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
+
+// ─── Invalidate cached AI fields ─────────────────────────────────────────────
+// @route  POST /api/notes/:id/regenerate-ai
+// @access Private (Owner / Admin)
+// Clears stored aiSummary, aiQuiz, and aiRecommendations so the next request
+// to each AI endpoint will produce a fresh result.
+export const regenerateAiContent = async (req, res) => {
+  try {
+    const lectureNote = await LectureNote.findById(req.params.id);
+
+    if (!lectureNote) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Lecture note not found" });
+    }
+
+    if (
+      lectureNote.uploadedBy.toString() !== req.user.id &&
+      req.user.role !== "admin"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to regenerate AI content for this note",
+      });
+    }
+
+    // Selectively clear only the fields requested
+    const { clearSummary, clearQuiz, clearRecommendations } = req.body;
+
+    if (clearSummary !== false) lectureNote.aiSummary = undefined;
+    if (clearQuiz !== false) lectureNote.aiQuiz = undefined;
+    if (clearRecommendations !== false)
+      lectureNote.aiRecommendations = undefined;
+
+    await lectureNote.save();
+
+    res.status(200).json({
+      success: true,
+      message: "AI content cleared. Re-request each AI endpoint to regenerate.",
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// ─── Path constant (shared by upload / delete / preview / download) ───────────
+const assignmentsDir = path.join(__dirname, "../public/uploads/assignments");

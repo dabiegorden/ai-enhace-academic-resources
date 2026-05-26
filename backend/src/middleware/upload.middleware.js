@@ -3,10 +3,9 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 
-// Configure multer for file uploads — memory storage so we can pipe to Cloudinary
+// ─── Default upload (announcements / voting) — memory storage ─────────────────
 const storage = multer.memoryStorage();
 
-// Accept images AND common document types for announcements/voting
 const allowedMimeTypes = [
   "image/jpeg",
   "image/png",
@@ -29,49 +28,38 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
-// Default export — used by announcements and voting
 const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB max per file
-  },
-  fileFilter: fileFilter,
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter,
 });
 
 export default upload;
 
+// ─── Directory setup ──────────────────────────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create uploads directories if they don't exist
 const assignmentsDir = path.join(__dirname, "../public/uploads/assignments");
 const submissionsDir = path.join(__dirname, "../public/uploads/submissions");
+
 [assignmentsDir, submissionsDir].forEach((dir) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
-const assignmentStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, assignmentsDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
-    cb(null, `${name}-${uniqueSuffix}${ext}`);
-  },
-});
+// ─── Disk storage factories ───────────────────────────────────────────────────
+const makeDiskStorage = (dest) =>
+  multer.diskStorage({
+    destination: (req, file, cb) => cb(null, dest),
+    filename: (req, file, cb) => {
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const ext = path.extname(file.originalname);
+      const name = path.basename(file.originalname, ext);
+      cb(null, `${name}-${uniqueSuffix}${ext}`);
+    },
+  });
 
-const submissionStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, submissionsDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
-    cb(null, `${name}-${uniqueSuffix}${ext}`);
-  },
-});
-
+// ─── General document filter (assignments / submissions) ─────────────────────
 const documentFileFilter = (req, file, cb) => {
   const allowedMimes = [
     "application/pdf",
@@ -113,14 +101,60 @@ const documentFileFilter = (req, file, cb) => {
   }
 };
 
+// ─── Lecture-note specific filter — PDF and images ONLY ──────────────────────
+/**
+ * Lecture notes only accept PDF files and common image formats.
+ * Word, PowerPoint, Excel and other document types are intentionally
+ * excluded so that the AI pipeline (summary, quiz, recommendations)
+ * can reliably parse every uploaded file.
+ */
+const lectureNoteFileFilter = (req, file, cb) => {
+  const allowedMimes = [
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+  ];
+
+  const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".gif"];
+
+  const ext = path.extname(file.originalname).toLowerCase();
+
+  if (allowedMimes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
+    cb(null, true);
+  } else {
+    cb(
+      new Error(
+        "Invalid file type for lecture notes. Only PDF and image files (jpg, jpeg, png, webp, gif) are allowed.",
+      ),
+      false,
+    );
+  }
+};
+
+// ─── Exported multer instances ────────────────────────────────────────────────
+
+/** Used by assignment creation routes (broad document types) */
 export const uploadAssignments = multer({
-  storage: assignmentStorage,
+  storage: makeDiskStorage(assignmentsDir),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: documentFileFilter,
 });
 
+/** Used by submission routes (broad document types) */
 export const uploadSubmissions = multer({
-  storage: submissionStorage,
+  storage: makeDiskStorage(submissionsDir),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: documentFileFilter,
+});
+
+/**
+ * Used exclusively by lecture-note upload routes.
+ * Accepts PDF and images only — enforces the AI-parsable requirement.
+ */
+export const uploadLectureNoteFile = multer({
+  storage: makeDiskStorage(assignmentsDir),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: lectureNoteFileFilter,
 });

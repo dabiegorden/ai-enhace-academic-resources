@@ -6,16 +6,13 @@ import ChatRoom from "../models/chatroom.model.js";
 
 /**
  * Builds a compact, anonymised transcript of the last N messages.
- * We anonymise by role (Student A, Lecturer B, etc.) so the AI focuses
- * on content, not identity.
  */
 const buildTranscript = (messages, limit = 60) => {
   const roleMap = {};
   const roleCounts = {};
 
-  const recent = messages.slice(-limit);
-
-  return recent
+  return messages
+    .slice(-limit)
     .map((msg) => {
       const uid = msg.user?._id?.toString?.() ?? msg.user?.toString?.();
       if (!uid) return null;
@@ -40,6 +37,20 @@ const buildTranscript = (messages, limit = 60) => {
     .join("\n");
 };
 
+/**
+ * Builds a concise context block from a LectureNote document for use
+ * in AI prompts — avoids repeating the same interpolation everywhere.
+ */
+const buildNoteContext = (note) =>
+  [
+    `Title: ${note.title}`,
+    `Course: ${note.course} (${note.courseCode})`,
+    note.description ? `Description: ${note.description}` : null,
+    note.aiSummary ? `Existing Summary: ${note.aiSummary}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
 // ─── Summarise Lecture Note ────────────────────────────────────────────────────
 // @route  POST /api/ai/summarize-note/:id
 // @access Private
@@ -52,6 +63,7 @@ export const summarizeLectureNote = async (req, res) => {
         .json({ success: false, message: "Lecture note not found" });
     }
 
+    // Return cached summary immediately
     if (lectureNote.aiSummary) {
       return res.status(200).json({
         success: true,
@@ -60,13 +72,12 @@ export const summarizeLectureNote = async (req, res) => {
       });
     }
 
-    const model = getGeminiModel("gemini-3-flash-preview");
+    const model = getGeminiModel("gemini-3.5-flash");
+
     const prompt = `You are an AI assistant helping students understand lecture materials.
 Summarise the following lecture note clearly and concisely for students.
 
-Title: ${lectureNote.title}
-Course: ${lectureNote.course} (${lectureNote.courseCode})
-Description: ${lectureNote.description || "No description provided"}
+${buildNoteContext(lectureNote)}
 
 Provide:
 1. A brief overview (2-3 sentences)
@@ -110,15 +121,11 @@ export const answerStudentQuestion = async (req, res) => {
     let contextInfo = context || "";
     if (lectureNoteId) {
       const lectureNote = await LectureNote.findById(lectureNoteId);
-      if (lectureNote) {
-        contextInfo = `Course: ${lectureNote.course} (${lectureNote.courseCode})
-Topic: ${lectureNote.title}
-Description: ${lectureNote.description || ""}
-${lectureNote.aiSummary ? `Summary: ${lectureNote.aiSummary}` : ""}`;
-      }
+      if (lectureNote) contextInfo = buildNoteContext(lectureNote);
     }
 
-    const model = getGeminiModel("gemini-3-flash-preview");
+    const model = getGeminiModel("gemini-3.5-flash");
+
     const prompt = `You are an AI academic assistant for Catholic University of Ghana students.
 ${contextInfo ? `Context:\n${contextInfo}\n` : ""}
 Student Question: ${question}
@@ -159,7 +166,7 @@ export const summarizeChatDiscussion = async (req, res) => {
     }
 
     const transcript = buildTranscript(chatRoom.messages);
-    const model = getGeminiModel("gemini-3-flash-preview");
+    const model = getGeminiModel("gemini-3.5-flash");
 
     const prompt = `Summarise this student discussion from the chat room "${chatRoom.name}".
 
@@ -194,10 +201,6 @@ Be brief and focus on academic content.`;
 };
 
 // ─── Analyse Chat Room — STREAMING (SSE) ─────────────────────────────────────
-// Performs sentiment analysis, engagement scoring, topic extraction, and
-// a natural-language insight in one shot. Streams the insight text using
-// Server-Sent Events so the frontend can render it with a typing effect.
-//
 // @route  GET /api/ai/chat-analysis/:roomId
 // @access Private
 export const analyseChatRoom = async (req, res) => {
@@ -214,17 +217,13 @@ export const analyseChatRoom = async (req, res) => {
     }
 
     const messages = chatRoom.messages ?? [];
-
-    // ── Quick metrics (computed server-side, not streamed) ────────────────────
     const totalMessages = messages.length;
 
-    // Unique participants
     const participantSet = new Set(
       messages.map((m) => m.user?._id?.toString() ?? m.user?.toString()),
     );
     const uniqueParticipants = participantSet.size;
 
-    // Message length average (engagement proxy)
     const avgLength =
       totalMessages > 0
         ? Math.round(
@@ -233,7 +232,6 @@ export const analyseChatRoom = async (req, res) => {
           )
         : 0;
 
-    // Activity over time — last 7 days
     const now = Date.now();
     const DAY = 86_400_000;
     const activityByDay = Array.from({ length: 7 }, (_, i) => {
@@ -245,14 +243,12 @@ export const analyseChatRoom = async (req, res) => {
       }).length;
     });
 
-    // If there are no messages, skip the AI call and return empty analysis
-    if (totalMessages === 0) {
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      res.flushHeaders();
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
 
-      // Send metrics first
+    if (totalMessages === 0) {
       res.write(
         `data: ${JSON.stringify({
           type: "metrics",
@@ -275,17 +271,8 @@ export const analyseChatRoom = async (req, res) => {
       return;
     }
 
-    // ── Build transcript for AI ───────────────────────────────────────────────
     const transcript = buildTranscript(messages, 80);
-
-    // ── SSE headers ───────────────────────────────────────────────────────────
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
-
-    // ── Step 1: structured JSON analysis (non-streamed internally) ────────────
-    const model = getGeminiModel("gemini-3-flash-preview");
+    const model = getGeminiModel("gemini-3.5-flash");
 
     const jsonPrompt = `Analyse the following chat room transcript from "${chatRoom.name}" at Catholic University of Ghana.
 
@@ -317,10 +304,9 @@ Respond ONLY with a valid JSON object (no markdown, no backticks) with this exac
         .trim();
       structured = JSON.parse(raw);
     } catch {
-      // Fall back to defaults if parsing fails
+      // Fall back to defaults
     }
 
-    // Send metrics + structured data as first SSE event
     res.write(
       `data: ${JSON.stringify({
         type: "metrics",
@@ -334,7 +320,6 @@ Respond ONLY with a valid JSON object (no markdown, no backticks) with this exac
       })}\n\n`,
     );
 
-    // ── Step 2: Natural-language insight (streamed) ───────────────────────────
     const insightPrompt = `You are an AI academic monitor for Catholic University of Ghana.
 
 You have analysed the chat room "${chatRoom.name}" and produced these findings:
@@ -344,7 +329,7 @@ You have analysed the chat room "${chatRoom.name}" and produced these findings:
 - Emotional Tone: ${structured.emotionalTone}
 - Risk Flags: ${structured.riskFlags.length ? structured.riskFlags.join("; ") : "none"}
 
-Write a concise, warm, 3–5 sentence insight paragraph for the dashboard. 
+Write a concise, warm, 3–5 sentence insight paragraph for the dashboard.
 - Describe what the conversation reveals about the students' engagement and understanding.
 - Highlight any positive patterns or areas that need attention.
 - End with a practical suggestion for the educator or administrator.
@@ -364,7 +349,6 @@ Write a concise, warm, 3–5 sentence insight paragraph for the dashboard.
     res.end();
   } catch (error) {
     console.error("AI Chat Analysis error:", error);
-    // Try to send error over SSE if headers already sent, otherwise normal JSON
     if (res.headersSent) {
       res.write(
         `data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`,
@@ -381,7 +365,7 @@ Write a concise, warm, 3–5 sentence insight paragraph for the dashboard.
 
 // ─── Generate Exam Questions ──────────────────────────────────────────────────
 // @route  POST /api/ai/generate-exam
-// @access Private (Lecturer/Admin)
+// @access Private (Lecturer / Admin)
 export const generateExamQuestions = async (req, res) => {
   try {
     const { lectureNoteIds, numberOfQuestions, difficulty, questionTypes } =
@@ -403,13 +387,10 @@ export const generateExamQuestions = async (req, res) => {
     }
 
     const notesContext = lectureNotes
-      .map(
-        (n) =>
-          `Title: ${n.title}\nCourse: ${n.course}\nDescription: ${n.description || ""}\n${n.aiSummary ? `Summary: ${n.aiSummary}` : ""}`,
-      )
+      .map((n) => buildNoteContext(n))
       .join("\n---\n");
 
-    const model = getGeminiModel("gemini-3-flash-preview");
+    const model = getGeminiModel("gemini-3.5-flash");
 
     const prompt = `Generate ${numberOfQuestions || 10} exam questions for university students.
 
@@ -476,7 +457,7 @@ Return ONLY a JSON array (no markdown) with this structure:
 export const getStudySuggestions = async (req, res) => {
   try {
     const { course, topics, upcomingExam } = req.body;
-    const model = getGeminiModel("gemini-3-flash-preview");
+    const model = getGeminiModel("gemini-3.5-flash");
 
     const prompt = `You are an AI study advisor for Catholic University of Ghana students.
 
@@ -488,6 +469,7 @@ Provide a personalised study plan including: study schedule, key focus areas, te
 
     const result = await model.generateContent(prompt);
     const suggestions = result.response.text();
+
     res.status(200).json({ success: true, data: { suggestions } });
   } catch (error) {
     console.error("AI Study Suggestions error:", error);
@@ -511,7 +493,7 @@ export const explainConcept = async (req, res) => {
       });
     }
 
-    const model = getGeminiModel("gemini-3-flash-preview");
+    const model = getGeminiModel("gemini-3.5-flash");
 
     const prompt = `You are an AI tutor at Catholic University of Ghana.
 
@@ -522,12 +504,322 @@ Explain this concept starting with a simple definition, breaking down key compon
 
     const result = await model.generateContent(prompt);
     const explanation = result.response.text();
+
     res.status(200).json({ success: true, data: { concept, explanation } });
   } catch (error) {
     console.error("AI Explain Concept error:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to explain concept",
+    });
+  }
+};
+
+// ─── NEW: Generate Quiz from Lecture Note ─────────────────────────────────────
+// Generates a self-assessment quiz derived specifically from the content of a
+// single lecture note. Results are cached on the document to avoid redundant
+// AI calls; pass `force=true` in the request body to regenerate.
+//
+// @route  POST /api/ai/generate-quiz/:id
+// @access Private
+export const generateNoteQuiz = async (req, res) => {
+  try {
+    const lectureNote = await LectureNote.findById(req.params.id);
+    if (!lectureNote) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Lecture note not found" });
+    }
+
+    const {
+      numberOfQuestions = 10,
+      difficulty = "mixed",
+      questionTypes = ["multiple-choice", "true-false", "short-answer"],
+      force = false,
+    } = req.body;
+
+    // Return cached quiz unless caller explicitly requests a fresh one
+    if (!force && lectureNote.aiQuiz?.questions?.length > 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Quiz loaded from cache",
+        data: {
+          quiz: lectureNote.aiQuiz,
+          noteTitle: lectureNote.title,
+          course: lectureNote.course,
+          courseCode: lectureNote.courseCode,
+        },
+      });
+    }
+
+    const model = getGeminiModel("gemini-3.5-flash");
+
+    const difficultyInstructions = {
+      easy: "Focus on basic recall and simple understanding questions suitable for first-time learners.",
+      medium:
+        "Mix recall, comprehension, and basic application questions appropriate for mid-semester review.",
+      hard: "Emphasise analysis, evaluation, and application questions that challenge deep understanding.",
+      mixed:
+        "Include a balanced mix of easy, medium, and hard questions covering recall through analysis.",
+    };
+
+    const prompt = `You are an AI academic quiz generator for Catholic University of Ghana.
+Generate a self-assessment quiz for students based on the following lecture note.
+
+LECTURE NOTE DETAILS:
+${buildNoteContext(lectureNote)}
+
+QUIZ REQUIREMENTS:
+- Number of questions: ${numberOfQuestions}
+- Difficulty: ${difficulty} — ${difficultyInstructions[difficulty] || difficultyInstructions.mixed}
+- Question types to include: ${questionTypes.join(", ")}
+- Each question must have a clear, unambiguous correct answer.
+- For multiple-choice, provide exactly 4 options (A–D).
+- For true-false, options must be exactly ["True", "False"].
+- For short-answer, correctAnswer should be a concise model answer (1–3 sentences).
+- Include a brief explanation (1–2 sentences) for each answer to aid learning.
+- Assign difficulty per question: "easy", "medium", or "hard".
+- Assign points: easy = 1, medium = 2, hard = 3.
+
+Respond ONLY with a valid JSON array (no markdown, no backticks, no preamble):
+[
+  {
+    "question": "<question text>",
+    "type": "multiple-choice" | "true-false" | "short-answer",
+    "options": ["<A>", "<B>", "<C>", "<D>"],
+    "correctAnswer": "<correct option or text>",
+    "explanation": "<why this is correct>",
+    "difficulty": "easy" | "medium" | "hard",
+    "points": 1 | 2 | 3
+  }
+]`;
+
+    const result = await model.generateContent(prompt);
+    const raw = result.response
+      .text()
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
+
+    let questions;
+    try {
+      questions = JSON.parse(raw);
+    } catch (parseErr) {
+      console.error("Quiz JSON parse error:", parseErr);
+      return res.status(500).json({
+        success: false,
+        message: "AI returned malformed quiz data. Please try again.",
+        raw,
+      });
+    }
+
+    // Validate and sanitise each question before storing
+    const validTypes = new Set([
+      "multiple-choice",
+      "true-false",
+      "short-answer",
+    ]);
+    const validDifficulties = new Set(["easy", "medium", "hard"]);
+
+    const sanitised = questions
+      .filter((q) => q.question && validTypes.has(q.type) && q.correctAnswer)
+      .map((q) => ({
+        question: String(q.question),
+        type: q.type,
+        options: Array.isArray(q.options) ? q.options.map(String) : [],
+        correctAnswer: String(q.correctAnswer),
+        explanation: q.explanation ? String(q.explanation) : "",
+        difficulty: validDifficulties.has(q.difficulty)
+          ? q.difficulty
+          : "medium",
+        points: typeof q.points === "number" && q.points > 0 ? q.points : 1,
+      }));
+
+    if (sanitised.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "AI could not generate valid questions for this note. Please try again.",
+      });
+    }
+
+    // Persist to the note document
+    lectureNote.aiQuiz = {
+      questions: sanitised,
+      generatedAt: new Date(),
+      difficulty,
+    };
+    await lectureNote.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Quiz generated successfully with ${sanitised.length} questions`,
+      data: {
+        quiz: lectureNote.aiQuiz,
+        noteTitle: lectureNote.title,
+        course: lectureNote.course,
+        courseCode: lectureNote.courseCode,
+      },
+    });
+  } catch (error) {
+    console.error("AI Quiz Generation error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to generate quiz",
+    });
+  }
+};
+
+// ─── NEW: Get Recommendations for Lecture Note ────────────────────────────────
+// Returns AI-generated study recommendations, related topics, prerequisites,
+// and further reading suggestions for a given lecture note.
+// Results are cached; pass `force=true` to regenerate.
+//
+// @route  POST /api/ai/note-recommendations/:id
+// @access Private
+export const getNoteRecommendations = async (req, res) => {
+  try {
+    const lectureNote = await LectureNote.findById(req.params.id);
+    if (!lectureNote) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Lecture note not found" });
+    }
+
+    const { force = false } = req.body;
+
+    // Return cached recommendations unless regeneration is forced
+    if (!force && lectureNote.aiRecommendations?.content) {
+      return res.status(200).json({
+        success: true,
+        message: "Recommendations loaded from cache",
+        data: {
+          recommendations: lectureNote.aiRecommendations,
+          noteTitle: lectureNote.title,
+          course: lectureNote.course,
+          courseCode: lectureNote.courseCode,
+        },
+      });
+    }
+
+    // Enrich context: pull sibling notes from the same course for cross-linking
+    const siblingNotes = await LectureNote.find({
+      courseCode: lectureNote.courseCode,
+      _id: { $ne: lectureNote._id },
+    })
+      .select("title description")
+      .limit(10)
+      .lean();
+
+    const siblingsContext =
+      siblingNotes.length > 0
+        ? `\nOther notes available in ${lectureNote.courseCode}:\n${siblingNotes
+            .map(
+              (n, i) =>
+                `${i + 1}. ${n.title}${n.description ? ` — ${n.description}` : ""}`,
+            )
+            .join("\n")}`
+        : "";
+
+    const model = getGeminiModel("gemini-3.5-flash");
+
+    const prompt = `You are an AI academic advisor for Catholic University of Ghana students.
+Analyse the following lecture note and produce personalised study recommendations.
+
+LECTURE NOTE:
+${buildNoteContext(lectureNote)}
+${siblingsContext}
+
+Generate a comprehensive recommendation package in STRICT JSON (no markdown, no backticks):
+{
+  "content": "<3–5 sentence plain-prose overview of how to approach studying this material, written warmly and encouragingly>",
+  "relatedTopics": [
+    "<up to 6 closely related academic topics the student should explore>"
+  ],
+  "studyTips": [
+    "<up to 5 concrete, actionable study tips tailored to this specific material>"
+  ],
+  "prerequisites": [
+    "<up to 4 concepts or topics the student should understand before or alongside this note>"
+  ],
+  "furtherReading": [
+    "<up to 5 suggested textbooks, academic papers, or reputable online resources with brief descriptions>"
+  ]
+}
+
+Rules:
+- All arrays must contain strings, not objects.
+- furtherReading items should follow the pattern: "Resource title / author — one-sentence description."
+- Keep all text concise and directly relevant to the lecture note content.
+- Do NOT invent unrelated topics; ground every suggestion in the note's subject matter.`;
+
+    const result = await model.generateContent(prompt);
+    const raw = result.response
+      .text()
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (parseErr) {
+      console.error("Recommendations JSON parse error:", parseErr);
+      return res.status(500).json({
+        success: false,
+        message: "AI returned malformed recommendations. Please try again.",
+        raw,
+      });
+    }
+
+    // Sanitise the parsed output
+    const sanitised = {
+      content: typeof parsed.content === "string" ? parsed.content : "",
+      relatedTopics: Array.isArray(parsed.relatedTopics)
+        ? parsed.relatedTopics.map(String).slice(0, 6)
+        : [],
+      studyTips: Array.isArray(parsed.studyTips)
+        ? parsed.studyTips.map(String).slice(0, 5)
+        : [],
+      prerequisites: Array.isArray(parsed.prerequisites)
+        ? parsed.prerequisites.map(String).slice(0, 4)
+        : [],
+      furtherReading: Array.isArray(parsed.furtherReading)
+        ? parsed.furtherReading.map(String).slice(0, 5)
+        : [],
+    };
+
+    if (!sanitised.content) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "AI could not generate valid recommendations. Please try again.",
+      });
+    }
+
+    // Persist to the note document
+    lectureNote.aiRecommendations = {
+      ...sanitised,
+      generatedAt: new Date(),
+    };
+    await lectureNote.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Recommendations generated successfully",
+      data: {
+        recommendations: lectureNote.aiRecommendations,
+        noteTitle: lectureNote.title,
+        course: lectureNote.course,
+        courseCode: lectureNote.courseCode,
+        siblingNotesFound: siblingNotes.length,
+      },
+    });
+  } catch (error) {
+    console.error("AI Recommendations error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to generate recommendations",
     });
   }
 };

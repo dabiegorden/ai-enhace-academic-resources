@@ -1,5 +1,29 @@
 import mongoose from "mongoose";
 
+// ─── Quiz question sub-schema ─────────────────────────────────────────────────
+const quizQuestionSchema = new mongoose.Schema(
+  {
+    question: { type: String, required: true },
+    type: {
+      type: String,
+      enum: ["multiple-choice", "true-false", "short-answer"],
+      required: true,
+    },
+    // Only present for multiple-choice questions
+    options: [{ type: String }],
+    correctAnswer: { type: String, required: true },
+    explanation: { type: String },
+    difficulty: {
+      type: String,
+      enum: ["easy", "medium", "hard"],
+      default: "medium",
+    },
+    points: { type: Number, default: 1 },
+  },
+  { _id: false },
+);
+
+// ─── Main schema ──────────────────────────────────────────────────────────────
 const lectureNoteSchema = new mongoose.Schema(
   {
     title: {
@@ -31,7 +55,8 @@ const lectureNoteSchema = new mongoose.Schema(
       type: Number,
       required: [true, "Year of study is required"],
     },
-    // Updated to match timetable document structure
+
+    // ── File fields — PDF and images only ──────────────────────────────────
     filename: {
       type: String,
       required: [true, "Filename is required"],
@@ -40,42 +65,71 @@ const lectureNoteSchema = new mongoose.Schema(
       type: String,
       required: [true, "Original filename is required"],
     },
+    /**
+     * fileType is now restricted to PDF and image extensions only.
+     * The upload middleware enforces the same constraint so these two
+     * sources of truth stay in sync.
+     */
     fileType: {
       type: String,
-      enum: ["pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"],
+      enum: ["pdf", "jpg", "jpeg", "png", "webp", "gif"],
       required: true,
     },
     fileSize: {
       type: Number,
     },
+
+    // ── Ownership ─────────────────────────────────────────────────────────
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+
+    // ── AI-generated fields ────────────────────────────────────────────────
+    /** Plain-text or markdown summary produced by the AI pipeline */
     aiSummary: {
       type: String,
     },
-    downloads: {
-      type: Number,
-      default: 0,
-    },
-    views: {
-      type: Number,
-      default: 0,
-    },
-    tags: [
-      {
+
+    /**
+     * Auto-generated quiz questions derived from the note content.
+     * Stored so repeated requests return the cached set without
+     * re-calling the AI model.
+     */
+    aiQuiz: {
+      questions: [quizQuestionSchema],
+      generatedAt: { type: Date },
+      difficulty: {
         type: String,
+        enum: ["easy", "medium", "hard", "mixed"],
+        default: "mixed",
       },
-    ],
+    },
+
+    /**
+     * AI-generated recommendations for this note — related topics, further
+     * reading suggestions, study tips, and prerequisite concepts.
+     */
+    aiRecommendations: {
+      content: { type: String }, // Markdown / plain-text advice block
+      relatedTopics: [{ type: String }],
+      studyTips: [{ type: String }],
+      prerequisites: [{ type: String }],
+      furtherReading: [{ type: String }],
+      generatedAt: { type: Date },
+    },
+
+    // ── Engagement stats ───────────────────────────────────────────────────
+    downloads: { type: Number, default: 0 },
+    views: { type: Number, default: 0 },
+
+    tags: [{ type: String }],
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-// Index for efficient searching
+// ─── Indexes ──────────────────────────────────────────────────────────────────
 lectureNoteSchema.index({ course: 1, faculty: 1, program: 1, yearOfStudy: 1 });
 lectureNoteSchema.index({ title: "text", description: "text" });
 
