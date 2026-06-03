@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import cloudinary from "../config/cloudinary.js";
-import User from "../models/User.model.js";
+import User from "../models/user.model.js";
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const sanitize = (user) => {

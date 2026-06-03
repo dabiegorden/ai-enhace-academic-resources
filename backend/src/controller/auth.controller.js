@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
-import User from "../models/User.model.js";
+import User from "../models/user.model.js";
 
 // @desc    Register new user
 // @route   POST /api/auth/register
