@@ -85,7 +85,7 @@ const StudentsAssignments = () => {
   const [submitting, setSubmitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const userId =
@@ -532,7 +532,7 @@ const StudentsAssignments = () => {
                             size="sm"
                             onClick={() =>
                               window.open(
-                                `${process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000"}${file.url}`,
+                                `${process.env.NEXT_PUBLIC_API_URL}${file.url}`,
                                 "_blank",
                               )
                             }
@@ -596,7 +596,7 @@ const StudentsAssignments = () => {
                             size="sm"
                             onClick={() =>
                               window.open(
-                                `${process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000"}${submission?.fileUrl}`,
+                                `${process.env.NEXT_PUBLIC_API_URL}${submission?.fileUrl}`,
                                 "_blank",
                               )
                             }

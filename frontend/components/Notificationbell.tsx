@@ -6,10 +6,7 @@ import { toast } from "sonner";
 import { io as SocketIO, Socket } from "socket.io-client";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-const wsUrl =
-  process.env.NEXT_PUBLIC_WS_URL ||
-  process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") ||
-  "http://localhost:5000";
+const wsUrl = process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 export interface AppNotification {

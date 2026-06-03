@@ -172,7 +172,7 @@ export default function AdminExaminationsPage() {
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [points, setPoints] = useState("1");
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 

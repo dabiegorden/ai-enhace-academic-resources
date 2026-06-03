@@ -7,6 +7,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
 // Zod Schema for Registration
 const registerSchema = z
   .object({
@@ -75,7 +77,7 @@ export default function RegisterForm() {
       setLoading(true);
 
       const { confirmPassword, ...registerData } = formData;
-      const response = await fetch("http://localhost:5000/api/auth/register", {
+      const response = await fetch(`${apiUrl}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...registerData, role: "student" }),
@@ -460,7 +462,7 @@ export default function RegisterForm() {
             <p className="text-gray-600">
               Already have an account?{" "}
               <Link
-                href="/"
+                href="/auth/sign-in"
                 className="text-blue-600 hover:text-blue-700 font-semibold hover:underline"
               >
                 Sign In

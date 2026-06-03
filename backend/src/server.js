@@ -59,22 +59,22 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 
 // Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/notes", notesRoutes);
-app.use("/api/ai", aiRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/assignments", assignmentRoutes);
-app.use("/api/exams", examRoutes);
-app.use("/api/announcements", announcementRoutes);
-app.use("/api/timetables", timetableRoutes);
-app.use("/api/ratings", ratingRoutes);
-app.use("/api/voting", votingRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use("/api/stats", statRoutes);
+app.use("/auth", authRoutes);
+app.use("/users", userRoutes);
+app.use("/notes", notesRoutes);
+app.use("/ai", aiRoutes);
+app.use("/chat", chatRoutes);
+app.use("/assignments", assignmentRoutes);
+app.use("/exams", examRoutes);
+app.use("/announcements", announcementRoutes);
+app.use("/timetables", timetableRoutes);
+app.use("/ratings", ratingRoutes);
+app.use("/voting", votingRoutes);
+app.use("/notifications", notificationRoutes);
+app.use("/stats", statRoutes);
 
 // Health check route
-app.get("/api/health", (_, res) => {
+app.get("/health", (_, res) => {
   res.json({ status: "OK", message: "Server is running" });
 });
 
