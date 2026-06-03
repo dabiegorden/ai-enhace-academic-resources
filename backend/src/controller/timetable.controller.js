@@ -137,7 +137,13 @@ export const deleteTimetableDocument = async (req, res) => {
         timetable.timetableDocument.filename,
       );
       if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (error) {
+          console.log("File cleanup skipped:", error.message);
+        }
       }
     }
 
