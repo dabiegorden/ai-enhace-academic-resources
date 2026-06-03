@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import Notification from "../models/notification.model.js";
-import User from "../models/User.model.js";
+import User from "../models/user.model.js";
 
 // ─── Core broadcast helper ────────────────────────────────────────────────────
 /**
@@ -150,13 +150,11 @@ export const markAsRead = async (req, res) => {
         .json({ success: false, message: "Not authorized" });
     notification.isRead = true;
     await notification.save();
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Notification marked as read",
-        data: notification,
-      });
+    res.status(200).json({
+      success: true,
+      message: "Notification marked as read",
+      data: notification,
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

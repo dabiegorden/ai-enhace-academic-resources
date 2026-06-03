@@ -27,12 +27,10 @@ export const createAssignment = async (req, res) => {
       !yearOfStudy ||
       !dueDate
     ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Please provide all required fields",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Please provide all required fields",
+      });
     }
 
     const attachments = [];
@@ -75,7 +73,7 @@ export const createAssignment = async (req, res) => {
     });
 
     // Import User here to find matching students
-    const User = (await import("../models/User.model.js")).default;
+    const User = (await import("../models/user.model.js")).default;
     const students = await User.find({
       role: "student",
       faculty,
@@ -107,13 +105,11 @@ export const createAssignment = async (req, res) => {
       });
     }
 
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Assignment created successfully",
-        data: assignment,
-      });
+    res.status(201).json({
+      success: true,
+      message: "Assignment created successfully",
+      data: assignment,
+    });
   } catch (error) {
     if (req.files?.length > 0) {
       req.files.forEach((file) => {
@@ -155,16 +151,14 @@ export const getAllAssignments = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
     const total = await Assignment.countDocuments(query);
-    res
-      .status(200)
-      .json({
-        success: true,
-        count: assignments.length,
-        total,
-        page: parseInt(page),
-        pages: Math.ceil(total / parseInt(limit)),
-        data: assignments,
-      });
+    res.status(200).json({
+      success: true,
+      count: assignments.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      data: assignments,
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -174,12 +168,10 @@ export const getAllAssignments = async (req, res) => {
 export const getMyAssignments = async (req, res) => {
   try {
     if (req.user.role !== "student")
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "This endpoint is only for students",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "This endpoint is only for students",
+      });
     const { status, page = 1, limit = 20 } = req.query;
     const query = {
       faculty: req.user.faculty,
@@ -211,16 +203,14 @@ export const getMyAssignments = async (req, res) => {
       };
     });
     const total = await Assignment.countDocuments(query);
-    res
-      .status(200)
-      .json({
-        success: true,
-        count: assignmentsWithStatus.length,
-        total,
-        page: parseInt(page),
-        pages: Math.ceil(total / parseInt(limit)),
-        data: assignmentsWithStatus,
-      });
+    res.status(200).json({
+      success: true,
+      count: assignmentsWithStatus.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      data: assignmentsWithStatus,
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -262,22 +252,18 @@ export const submitAssignment = async (req, res) => {
     ) {
       if (req.file && fs.existsSync(req.file.path))
         fs.unlinkSync(req.file.path);
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "You have already submitted this assignment",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "You have already submitted this assignment",
+      });
     }
     if (!assignment.isActive) {
       if (req.file && fs.existsSync(req.file.path))
         fs.unlinkSync(req.file.path);
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "This assignment is no longer active",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "This assignment is no longer active",
+      });
     }
     const isLate = new Date() > new Date(assignment.dueDate);
     assignment.submissions.push({
@@ -289,13 +275,11 @@ export const submitAssignment = async (req, res) => {
       status: isLate ? "late" : "submitted",
     });
     await assignment.save();
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: `Assignment ${isLate ? "submitted late" : "submitted successfully"}`,
-        data: { submittedAt: new Date(), isLate },
-      });
+    res.status(201).json({
+      success: true,
+      message: `Assignment ${isLate ? "submitted late" : "submitted successfully"}`,
+      data: { submittedAt: new Date(), isLate },
+    });
   } catch (error) {
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(400).json({ success: false, message: error.message });
@@ -320,35 +304,29 @@ export const gradeSubmission = async (req, res) => {
       assignment.lecturer.toString() !== req.user.id &&
       req.user.role !== "admin"
     )
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Not authorized to grade this assignment",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to grade this assignment",
+      });
     const submission = assignment.submissions.id(submissionId);
     if (!submission)
       return res
         .status(404)
         .json({ success: false, message: "Submission not found" });
     if (grade < 0 || grade > assignment.totalMarks)
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: `Grade must be between 0 and ${assignment.totalMarks}`,
-        });
+      return res.status(400).json({
+        success: false,
+        message: `Grade must be between 0 and ${assignment.totalMarks}`,
+      });
     submission.grade = grade;
     submission.feedback = feedback || "";
     submission.status = "graded";
     await assignment.save();
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Submission graded successfully",
-        data: submission,
-      });
+    res.status(200).json({
+      success: true,
+      message: "Submission graded successfully",
+      data: submission,
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -376,13 +354,11 @@ export const updateAssignment = async (req, res) => {
     if (totalMarks) assignment.totalMarks = parseInt(totalMarks);
     if (isActive !== undefined) assignment.isActive = isActive;
     await assignment.save();
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Assignment updated successfully",
-        data: assignment,
-      });
+    res.status(200).json({
+      success: true,
+      message: "Assignment updated successfully",
+      data: assignment,
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -438,19 +414,17 @@ export const getAssignmentStats = async (req, res) => {
       .map((s) => s.grade);
     const averageGrade =
       grades.length > 0 ? grades.reduce((a, b) => a + b, 0) / grades.length : 0;
-    res
-      .status(200)
-      .json({
-        success: true,
-        data: {
-          totalSubmissions,
-          gradedSubmissions,
-          lateSubmissions,
-          averageGrade: averageGrade.toFixed(2),
-          highestGrade: grades.length > 0 ? Math.max(...grades) : 0,
-          lowestGrade: grades.length > 0 ? Math.min(...grades) : 0,
-        },
-      });
+    res.status(200).json({
+      success: true,
+      data: {
+        totalSubmissions,
+        gradedSubmissions,
+        lateSubmissions,
+        averageGrade: averageGrade.toFixed(2),
+        highestGrade: grades.length > 0 ? Math.max(...grades) : 0,
+        lowestGrade: grades.length > 0 ? Math.min(...grades) : 0,
+      },
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
