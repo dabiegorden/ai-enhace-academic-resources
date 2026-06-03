@@ -1,40 +1,59 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// ─── Vercel + Local Upload Directory ────────────────────────────────────────
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, "../public/uploads/timetables");
+// Vercel filesystem is read-only except /tmp
+const isVercel = process.env.VERCEL === "1";
+
+const baseUploadDir = isVercel
+  ? "/tmp/uploads"
+  : path.join(process.cwd(), "src/public/uploads");
+
+const uploadsDir = path.join(baseUploadDir, "timetables");
+
+// Create upload directory safely
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  fs.mkdirSync(uploadsDir, {
+    recursive: true,
+  });
 }
 
-// Configure multer for document uploads (local storage)
+// ─── Configure Multer Storage ───────────────────────────────────────────────
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
   },
+
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+
     const ext = path.extname(file.originalname);
+
     const name = path.basename(file.originalname, ext);
+
     cb(null, `${name}-${uniqueSuffix}${ext}`);
   },
 });
 
-// File filter for documents (PDF, Excel)
+// ─── File Filter ────────────────────────────────────────────────────────────
+// Allows PDF, Excel, ODS
+
 const fileFilter = (req, file, cb) => {
   const allowedMimes = [
     "application/pdf",
+
     "application/vnd.ms-excel",
+
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
     "application/vnd.oasis.opendocument.spreadsheet",
   ];
 
   const allowedExtensions = [".pdf", ".xls", ".xlsx", ".ods"];
+
   const ext = path.extname(file.originalname).toLowerCase();
 
   if (allowedMimes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
@@ -42,19 +61,24 @@ const fileFilter = (req, file, cb) => {
   } else {
     cb(
       new Error(
-        "Invalid file type. Only PDF and Excel files are allowed (pdf, xls, xlsx, ods)"
+        "Invalid file type. Only PDF and Excel files are allowed (pdf, xls, xlsx, ods)",
       ),
-      false
+
+      false,
     );
   }
 };
 
+// ─── Export Middleware ──────────────────────────────────────────────────────
+
 const uploadDocuments = multer({
-  storage: storage,
+  storage,
+
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max file size for documents
+    fileSize: 50 * 1024 * 1024,
   },
-  fileFilter: fileFilter,
+
+  fileFilter,
 });
 
 export default uploadDocuments;

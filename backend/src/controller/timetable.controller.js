@@ -1,11 +1,15 @@
 import Timetable from "../models/timetable.model.js";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { broadcastToRoles } from "../controller/notification.controller.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// ─── Vercel + Local Upload Path ─────────────────────────────
+
+const isVercel = process.env.VERCEL === "1";
+
+const timetableUploadDir = isVercel
+  ? "/tmp/uploads/timetables"
+  : path.join(process.cwd(), "src/public/uploads/timetables");
 
 export const uploadTimetableDocument = async (req, res) => {
   try {
@@ -32,8 +36,7 @@ export const uploadTimetableDocument = async (req, res) => {
     // Delete old file if exists
     if (timetable.timetableDocument && timetable.timetableDocument.filename) {
       const oldFilePath = path.join(
-        __dirname,
-        "../public/uploads/timetables",
+        timetableUploadDir,
         timetable.timetableDocument.filename,
       );
       if (fs.existsSync(oldFilePath)) {
@@ -91,8 +94,7 @@ export const downloadTimetableDocument = async (req, res) => {
     }
 
     const filePath = path.join(
-      __dirname,
-      "../public/uploads/timetables",
+      timetableUploadDir,
       timetable.timetableDocument.filename,
     );
 
@@ -131,8 +133,7 @@ export const deleteTimetableDocument = async (req, res) => {
 
     if (timetable.timetableDocument && timetable.timetableDocument.filename) {
       const filePath = path.join(
-        __dirname,
-        "../public/uploads/timetables",
+        timetableUploadDir,
         timetable.timetableDocument.filename,
       );
       if (fs.existsSync(filePath)) {
