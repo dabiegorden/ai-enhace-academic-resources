@@ -1,9 +1,9 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
 
-// ─── Default upload (announcements / voting) — memory storage ─────────────────
+// ─── Default upload (announcements / voting) — memory storage ────────────────
+
 const storage = multer.memoryStorage();
 
 const allowedMimeTypes = [
@@ -25,95 +25,136 @@ const fileFilter = (req, file, cb) => {
       false,
     );
   }
+
   cb(null, true);
 };
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
   fileFilter,
 });
 
 export default upload;
 
-// ─── Directory setup ──────────────────────────────────────────────────────────
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// ─── Vercel + Local Directory Setup ──────────────────────────────────────────
 
-const assignmentsDir = path.join(__dirname, "../public/uploads/assignments");
-const submissionsDir = path.join(__dirname, "../public/uploads/submissions");
+// Vercel only allows writing inside /tmp
+const isVercel = process.env.VERCEL === "1";
 
+const baseUploadDir = isVercel
+  ? "/tmp/uploads"
+  : path.join(process.cwd(), "src/public/uploads");
+
+const assignmentsDir = path.join(baseUploadDir, "assignments");
+
+const submissionsDir = path.join(baseUploadDir, "submissions");
+
+// create folders safely
 [assignmentsDir, submissionsDir].forEach((dir) => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, {
+      recursive: true,
+    });
+  }
 });
 
-// ─── Disk storage factories ───────────────────────────────────────────────────
+// ─── Disk storage factory ────────────────────────────────────────────────────
+
 const makeDiskStorage = (dest) =>
   multer.diskStorage({
-    destination: (req, file, cb) => cb(null, dest),
+    destination: (req, file, cb) => {
+      cb(null, dest);
+    },
+
     filename: (req, file, cb) => {
       const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+
       const ext = path.extname(file.originalname);
+
       const name = path.basename(file.originalname, ext);
+
       cb(null, `${name}-${uniqueSuffix}${ext}`);
     },
   });
 
-// ─── General document filter (assignments / submissions) ─────────────────────
+// ─── Assignment + Submission Filter ──────────────────────────────────────────
+
 const documentFileFilter = (req, file, cb) => {
   const allowedMimes = [
     "application/pdf",
+
     "application/msword",
+
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
     "application/vnd.ms-powerpoint",
+
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+
     "image/jpeg",
+
     "image/png",
+
     "image/webp",
+
     "application/vnd.ms-excel",
+
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   ];
 
   const allowedExtensions = [
     ".pdf",
+
     ".doc",
+
     ".docx",
+
     ".ppt",
+
     ".pptx",
+
     ".jpg",
+
     ".jpeg",
+
     ".png",
+
     ".webp",
+
     ".xls",
+
     ".xlsx",
   ];
 
   const ext = path.extname(file.originalname).toLowerCase();
+
   if (allowedMimes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
     cb(
       new Error(
-        "Invalid file type. Allowed types: PDF, Word, PowerPoint, Images, Excel",
+        "Invalid file type. Allowed: PDF, Word, PowerPoint, Images, Excel",
       ),
       false,
     );
   }
 };
 
-// ─── Lecture-note specific filter — PDF and images ONLY ──────────────────────
-/**
- * Lecture notes only accept PDF files and common image formats.
- * Word, PowerPoint, Excel and other document types are intentionally
- * excluded so that the AI pipeline (summary, quiz, recommendations)
- * can reliably parse every uploaded file.
- */
+// ─── Lecture Note Filter ─────────────────────────────────────────────────────
+
 const lectureNoteFileFilter = (req, file, cb) => {
   const allowedMimes = [
     "application/pdf",
+
     "image/jpeg",
+
     "image/png",
+
     "image/webp",
+
     "image/gif",
   ];
 
@@ -125,36 +166,43 @@ const lectureNoteFileFilter = (req, file, cb) => {
     cb(null, true);
   } else {
     cb(
-      new Error(
-        "Invalid file type for lecture notes. Only PDF and image files (jpg, jpeg, png, webp, gif) are allowed.",
-      ),
+      new Error("Invalid lecture note type. Only PDF and images are allowed."),
       false,
     );
   }
 };
 
-// ─── Exported multer instances ────────────────────────────────────────────────
+// ─── Export Upload Handlers ──────────────────────────────────────────────────
 
-/** Used by assignment creation routes (broad document types) */
+// Assignments
 export const uploadAssignments = multer({
   storage: makeDiskStorage(assignmentsDir),
-  limits: { fileSize: 50 * 1024 * 1024 },
+
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+  },
+
   fileFilter: documentFileFilter,
 });
 
-/** Used by submission routes (broad document types) */
+// Student submissions
 export const uploadSubmissions = multer({
   storage: makeDiskStorage(submissionsDir),
-  limits: { fileSize: 50 * 1024 * 1024 },
+
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+  },
+
   fileFilter: documentFileFilter,
 });
 
-/**
- * Used exclusively by lecture-note upload routes.
- * Accepts PDF and images only — enforces the AI-parsable requirement.
- */
+// Lecture notes (AI parser friendly)
 export const uploadLectureNoteFile = multer({
   storage: makeDiskStorage(assignmentsDir),
-  limits: { fileSize: 50 * 1024 * 1024 },
+
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+  },
+
   fileFilter: lectureNoteFileFilter,
 });

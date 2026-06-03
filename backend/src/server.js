@@ -2,11 +2,15 @@ import express from "express";
 import cors from "cors";
 import http from "http";
 import path from "path";
-import { fileURLToPath } from "url";
 import { Server as SocketIOServer } from "socket.io";
-import { setupSocketHandlers } from "./utils/socketHandlers.js";
+
 import connectDB from "./config/mongodb.js";
 import { ENV } from "./config/env.js";
+
+import { setupSocketHandlers } from "./utils/socketHandlers.js";
+import { startExamScheduler } from "./utils/examScheduler.js";
+
+// ─── Routes ────────────────────────────────────────────────────────────────
 
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
@@ -21,82 +25,124 @@ import ratingRoutes from "./routes/rating.routes.js";
 import votingRoutes from "./routes/voting.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import statRoutes from "./routes/stats.routes.js";
-import { startExamScheduler } from "./utils/examScheduler.js";
 
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// ─── App Setup ──────────────────────────────────────────────────────────────
 
-// Initialize express app
 const app = express();
-const server = http.createServer(app);
 
-const io = new SocketIOServer(server, {
-  cors: {
-    origin: process.env.FRONTEND_URL,
-    credentials: true,
-  },
-});
+const isVercel = process.env.VERCEL === "1";
 
-// Setup socket handlers
-setupSocketHandlers(io);
+// Connect database
+connectDB();
 
-// Make io accessible to routes
-app.set("io", io);
+// ─── Middlewares ────────────────────────────────────────────────────────────
 
-// Middleware
 app.use(
   cors({
     origin: process.env.FRONTEND_URL,
     credentials: true,
   }),
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Serve static files from the public directory
-// This allows access to uploaded files via /uploads/* URLs
-app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
+app.use(
+  express.json({
+    limit: "50mb",
+  }),
+);
 
-// Routes
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "50mb",
+  }),
+);
+
+// ─── Static Upload Folder ───────────────────────────────────────────────────
+
+const uploadPath = isVercel
+  ? "/tmp/uploads"
+  : path.join(process.cwd(), "src/public/uploads");
+
+app.use("/uploads", express.static(uploadPath));
+
+// ─── API Routes ─────────────────────────────────────────────────────────────
+
 app.use("/auth", authRoutes);
+
 app.use("/users", userRoutes);
+
 app.use("/notes", notesRoutes);
+
 app.use("/ai", aiRoutes);
+
 app.use("/chat", chatRoutes);
+
 app.use("/assignments", assignmentRoutes);
+
 app.use("/exams", examRoutes);
+
 app.use("/announcements", announcementRoutes);
+
 app.use("/timetables", timetableRoutes);
+
 app.use("/ratings", ratingRoutes);
+
 app.use("/voting", votingRoutes);
+
 app.use("/notifications", notificationRoutes);
+
 app.use("/stats", statRoutes);
 
-// Health check route
+// ─── Health Check ───────────────────────────────────────────────────────────
+
 app.get("/health", (_, res) => {
-  res.json({ status: "OK", message: "Server is running" });
+  res.json({
+    success: true,
+
+    message: "Server running",
+
+    environment: ENV.NODE_ENV,
+  });
 });
 
-// Error handling middleware
-app.use((err, _, res, next) => {
-  console.error(err.stack);
+// ─── Error Handler ──────────────────────────────────────────────────────────
+
+app.use((err, req, res, next) => {
+  console.error(err);
+
   res.status(err.statusCode || 500).json({
     success: false,
+
     message: err.message || "Server Error",
+
     errors: err.errors || null,
   });
 });
 
-const PORT = ENV.PORT;
+// ─── Socket + Local Server ──────────────────────────────────────────────────
 
-const startServer = async () => {
-  await connectDB();
+// Vercel does not support normal socket servers
+if (!isVercel) {
+  const server = http.createServer(app);
+
+  const io = new SocketIOServer(server, {
+    cors: {
+      origin: process.env.FRONTEND_URL,
+
+      credentials: true,
+    },
+  });
+
+  setupSocketHandlers(io);
+
+  app.set("io", io);
 
   startExamScheduler();
-  server.listen(PORT, () => {
-    console.log(`Server running in ${ENV.NODE_ENV} mode on port ${PORT}`);
-  });
-};
 
-startServer();
+  server.listen(ENV.PORT, () => {
+    console.log(`Server running on port ${ENV.PORT}`);
+  });
+}
+
+// IMPORTANT FOR VERCEL
+export default app;
