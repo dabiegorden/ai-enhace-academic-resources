@@ -44,6 +44,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FACULTY_NAMES, FACULTY_PROGRAMS } from "@/constants/faculties";
 
 interface LectureNote {
   _id: string;
@@ -99,14 +100,8 @@ const LecturerNotesPage = () => {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  const faculties = ["Engineering", "Science", "Arts", "Business", "Medicine"];
-  const programs = {
-    Engineering: ["Computer Science", "Electrical", "Mechanical", "Civil"],
-    Science: ["Physics", "Chemistry", "Biology", "Mathematics"],
-    Arts: ["English", "History", "Philosophy", "Languages"],
-    Business: ["Accounting", "Marketing", "Management", "Finance"],
-    Medicine: ["Medical", "Nursing", "Pharmacy", "Dentistry"],
-  };
+  const faculties = FACULTY_NAMES;
+  const programs = FACULTY_PROGRAMS;
 
   useEffect(() => {
     fetchNotes();

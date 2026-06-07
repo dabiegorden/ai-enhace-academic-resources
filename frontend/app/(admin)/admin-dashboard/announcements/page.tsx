@@ -31,6 +31,7 @@ import {
   Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
 
 interface Attachment {
   url: string;
@@ -52,16 +53,6 @@ interface Announcement {
   attachments?: Attachment[];
   createdAt: string;
 }
-
-const FACULTIES = [
-  "Engineering",
-  "Business",
-  "Arts",
-  "Science",
-  "Health Sciences",
-  "Law",
-  "Education",
-];
 
 const ANNOUNCEMENT_TYPES = [
   { value: "general", label: "General" },

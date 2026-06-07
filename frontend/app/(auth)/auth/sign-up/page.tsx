@@ -6,6 +6,7 @@ import { Toaster, toast } from "sonner";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { FACULTY_NAMES, FACULTY_PROGRAMS } from "@/constants/faculties";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -26,16 +27,6 @@ const registerSchema = z
     message: "Passwords don't match",
     path: ["confirmPassword"],
   });
-
-const faculties = [
-  "Engineering",
-  "Business",
-  "Arts",
-  "Science",
-  "Health Sciences",
-  "Law",
-  "Education",
-];
 
 export default function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -63,7 +54,11 @@ export default function RegisterForm() {
       e.target.name === "yearOfStudy"
         ? parseInt(e.target.value)
         : e.target.value;
-    setFormData({ ...formData, [e.target.name]: value });
+    if (e.target.name === "faculty") {
+      setFormData({ ...formData, faculty: value as string, program: "" });
+    } else {
+      setFormData({ ...formData, [e.target.name]: value });
+    }
     if (errors[e.target.name]) {
       setErrors({ ...errors, [e.target.name]: "" });
     }
@@ -307,7 +302,7 @@ export default function RegisterForm() {
                   } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white`}
                 >
                   <option value="">Select Faculty</option>
-                  {faculties.map((faculty) => (
+                  {FACULTY_NAMES.map((faculty) => (
                     <option key={faculty} value={faculty}>
                       {faculty}
                     </option>
@@ -344,16 +339,39 @@ export default function RegisterForm() {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Program <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                name="program"
-                value={formData.program}
-                onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
-                  errors.program ? "border-red-500" : "border-gray-300"
-                } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
-                placeholder="e.g., Computer Science, Business Administration"
-              />
+              {formData.faculty && FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                <select
+                  name="program"
+                  value={formData.program}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
+                    errors.program ? "border-red-500" : "border-gray-300"
+                  } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white`}
+                >
+                  <option value="">Select Program</option>
+                  {FACULTY_PROGRAMS[formData.faculty].map((program) => (
+                    <option key={program} value={program}>
+                      {program}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  name="program"
+                  value={formData.program}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 rounded-xl border-2 text-slate-900 ${
+                    errors.program ? "border-red-500" : "border-gray-300"
+                  } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all`}
+                  placeholder={
+                    formData.faculty
+                      ? "Enter your program"
+                      : "Select a faculty first"
+                  }
+                  disabled={!formData.faculty}
+                />
+              )}
               {errors.program && (
                 <p className="text-red-500 text-sm mt-1.5 flex items-center">
                   <span className="mr-1">⚠</span> {errors.program}

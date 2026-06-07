@@ -31,6 +31,7 @@ import {
   FileText,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
 
 interface TimetableDocument {
   filename: string;
@@ -57,15 +58,6 @@ interface Timetable {
   createdAt: string;
 }
 
-const FACULTIES = [
-  "Engineering",
-  "Business",
-  "Arts",
-  "Science",
-  "Health Sciences",
-  "Law",
-  "Education",
-];
 const LEVELS = ["100", "200", "300", "400"];
 const SEMESTERS = ["1", "2"];
 
@@ -710,6 +702,63 @@ const LecturerTimeTable = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-2">
+              <Label htmlFor="faculty">Faculty *</Label>
+              <Select
+                value={formData.faculty}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, faculty: value, programName: "" })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select faculty" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FACULTIES.map((f) => (
+                    <SelectItem key={f} value={f}>
+                      {f}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="programName">Program Name *</Label>
+              {formData.faculty &&
+              FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                <Select
+                  value={formData.programName}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, programName: value })
+                  }
+                >
+                  <SelectTrigger id="programName">
+                    <SelectValue placeholder="Select program" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FACULTY_PROGRAMS[formData.faculty].map((program) => (
+                      <SelectItem key={program} value={program}>
+                        {program}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="programName"
+                  value={formData.programName}
+                  onChange={(e) =>
+                    setFormData({ ...formData, programName: e.target.value })
+                  }
+                  placeholder={
+                    formData.faculty
+                      ? "e.g., Computer Science"
+                      : "Select a faculty first"
+                  }
+                  disabled={!formData.faculty}
+                />
+              )}
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="programCode">Program Code *</Label>
               <Input
                 id="programCode"
@@ -718,17 +767,6 @@ const LecturerTimeTable = () => {
                   setFormData({ ...formData, programCode: e.target.value })
                 }
                 placeholder="e.g., CS101"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="programName">Program Name *</Label>
-              <Input
-                id="programName"
-                value={formData.programName}
-                onChange={(e) =>
-                  setFormData({ ...formData, programName: e.target.value })
-                }
-                placeholder="e.g., Computer Science"
               />
             </div>
             <div className="grid gap-2">
@@ -758,26 +796,6 @@ const LecturerTimeTable = () => {
                   {LEVELS.map((l) => (
                     <SelectItem key={l} value={l}>
                       {l}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="faculty">Faculty *</Label>
-              <Select
-                value={formData.faculty}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, faculty: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select faculty" />
-                </SelectTrigger>
-                <SelectContent>
-                  {FACULTIES.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {f}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -869,13 +887,34 @@ const LecturerTimeTable = () => {
           <div className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="edit-programName">Program Name</Label>
-              <Input
-                id="edit-programName"
-                value={formData.programName}
-                onChange={(e) =>
-                  setFormData({ ...formData, programName: e.target.value })
-                }
-              />
+              {formData.faculty &&
+              FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                <Select
+                  value={formData.programName}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, programName: value })
+                  }
+                >
+                  <SelectTrigger id="edit-programName">
+                    <SelectValue placeholder="Select program" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FACULTY_PROGRAMS[formData.faculty].map((program) => (
+                      <SelectItem key={program} value={program}>
+                        {program}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="edit-programName"
+                  value={formData.programName}
+                  onChange={(e) =>
+                    setFormData({ ...formData, programName: e.target.value })
+                  }
+                />
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-semester">Semester</Label>

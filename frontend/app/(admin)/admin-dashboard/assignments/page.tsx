@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FACULTY_NAMES, FACULTY_PROGRAMS } from "@/constants/faculties";
 import {
   Select,
   SelectContent,
@@ -474,41 +475,58 @@ export default function AdminAssignmentsPage() {
                 <Select
                   value={formData.faculty}
                   onValueChange={(value) =>
-                    setFormData({ ...formData, faculty: value })
+                    setFormData({ ...formData, faculty: value, program: "" })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select faculty" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Engineering">Engineering</SelectItem>
-                    <SelectItem value="Science">Science</SelectItem>
-                    <SelectItem value="Arts">Arts</SelectItem>
-                    <SelectItem value="Business">Business</SelectItem>
+                    {FACULTY_NAMES.map((faculty) => (
+                      <SelectItem key={faculty} value={faculty}>
+                        {faculty}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="program">Program *</Label>
-                <Select
-                  value={formData.program}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, program: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select program" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Computer Science">
-                      Computer Science
-                    </SelectItem>
-                    <SelectItem value="Electrical">Electrical</SelectItem>
-                    <SelectItem value="Mechanical">Mechanical</SelectItem>
-                    <SelectItem value="Civil">Civil</SelectItem>
-                  </SelectContent>
-                </Select>
+                {formData.faculty &&
+                FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                  <Select
+                    value={formData.program}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, program: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select program" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FACULTY_PROGRAMS[formData.faculty].map((program) => (
+                        <SelectItem key={program} value={program}>
+                          {program}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id="program"
+                    value={formData.program}
+                    onChange={(e) =>
+                      setFormData({ ...formData, program: e.target.value })
+                    }
+                    placeholder={
+                      formData.faculty
+                        ? "Enter program"
+                        : "Select a faculty first"
+                    }
+                    disabled={!formData.faculty}
+                  />
+                )}
               </div>
             </div>
 

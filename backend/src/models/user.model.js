@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { FACULTY_NAMES } from "../constants/faculties.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -39,15 +40,7 @@ const userSchema = new mongoose.Schema(
     },
     faculty: {
       type: String,
-      enum: [
-        "Engineering",
-        "Business",
-        "Arts",
-        "Science",
-        "Health Sciences",
-        "Law",
-        "Education",
-      ],
+      enum: FACULTY_NAMES,
       required: function () {
         return this.role === "student" || this.role === "lecturer";
       },

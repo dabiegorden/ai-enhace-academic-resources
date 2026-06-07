@@ -393,27 +393,32 @@ export const updateTimetable = async (req, res) => {
     if (semester) timetable.semester = semester;
     if (academicYear) timetable.academicYear = academicYear;
     if (isActive !== undefined) timetable.isActive = isActive;
-    if (isPublished === true || isPublished === "true") {
-      const io = req.app.get("io");
-      await broadcastToRoles({
-        roles: ["student"],
-        type: "timetable",
-        title: "🗓️ Timetable Published",
-        message:
-          "A new timetable for " +
-          timetable.programName +
-          " Year " +
-          timetable.yearOfStudy +
-          " has been published.",
-        relatedId: timetable._id,
-        relatedModel: "Timetable",
-        metadata: {
-          programCode: timetable.programCode,
-          yearOfStudy: timetable.yearOfStudy,
-          semester: timetable.semester,
-        },
-        io,
-      });
+    if (isPublished !== undefined) {
+      const wasPublished = timetable.isPublished;
+      timetable.isPublished = isPublished === true || isPublished === "true";
+
+      if (timetable.isPublished && !wasPublished) {
+        const io = req.app.get("io");
+        await broadcastToRoles({
+          roles: ["student"],
+          type: "timetable",
+          title: "🗓️ Timetable Published",
+          message:
+            "A new timetable for " +
+            timetable.programName +
+            " Year " +
+            timetable.yearOfStudy +
+            " has been published.",
+          relatedId: timetable._id,
+          relatedModel: "Timetable",
+          metadata: {
+            programCode: timetable.programCode,
+            yearOfStudy: timetable.yearOfStudy,
+            semester: timetable.semester,
+          },
+          io,
+        });
+      }
     }
     if (specialization) timetable.specialization = specialization;
     if (timeSlots) timetable.timeSlots = timeSlots;

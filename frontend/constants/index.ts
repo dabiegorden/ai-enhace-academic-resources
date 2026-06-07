@@ -123,7 +123,7 @@ export const lecturerSidebarItems = [
     title: "Academic",
     items: [
       {
-        title: "Lecture Notes",
+        title: "My Notes",
         url: "/lecturer-dashboard/lecture-notes",
         icon: FileText,
       },

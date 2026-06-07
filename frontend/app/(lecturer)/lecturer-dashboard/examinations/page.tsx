@@ -549,42 +549,42 @@ export default function LecturerExaminationsPage() {
                 <div>
                   <CardTitle>{exam.title}</CardTitle>
                   <CardDescription>
-                    {exam.createdBy.firstName} {exam.createdBy.lastName}
+                    {exam?.createdBy?.firstName} {exam?.createdBy?.lastName}
                   </CardDescription>
                 </div>
-                {getStatusBadge(exam.status)}
+                {getStatusBadge(exam?.status)}
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {exam.status === "active" && exam.startedAt && (
+                {exam?.status === "active" && exam?.startedAt && (
                   <ExamTimer
-                    startedAt={exam.startedAt}
-                    durationInMinutes={exam.durationInMinutes}
-                    onTimeUp={() => handleEndExam(exam._id)}
+                    startedAt={exam?.startedAt}
+                    durationInMinutes={exam?.durationInMinutes}
+                    onTimeUp={() => handleEndExam(exam?._id)}
                   />
                 )}
                 <div className="flex items-center gap-2 text-sm">
                   <Clock className="size-4 text-muted-foreground" />
-                  <span>{exam.durationInMinutes} minutes</span>
+                  <span>{exam?.durationInMinutes} minutes</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <FileText className="size-4 text-muted-foreground" />
                   <span>
-                    {exam.questions.length} question
-                    {exam.questions.length !== 1 ? "s" : ""} ({exam.totalPoints}{" "}
-                    points)
+                    {exam?.questions.length} question
+                    {exam?.questions.length !== 1 ? "s" : ""} (
+                    {exam?.totalPoints} points)
                   </span>
                 </div>
-                {exam.submissions && exam.submissions.length > 0 && (
+                {exam?.submissions && exam?.submissions.length > 0 && (
                   <div className="flex items-center gap-2 text-sm">
                     <CheckCircle2 className="size-4 text-muted-foreground" />
-                    <span>{exam.submissions.length} submission(s)</span>
+                    <span>{exam?.submissions?.length} submission(s)</span>
                   </div>
                 )}
 
                 <div className="pt-3 space-y-2">
-                  {exam.status === "draft" && (
+                  {exam?.status === "draft" && (
                     <>
                       <Button
                         variant="outline"

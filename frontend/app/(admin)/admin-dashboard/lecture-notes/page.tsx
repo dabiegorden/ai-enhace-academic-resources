@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Eye, Edit, Trash2, BookOpen, Download } from "lucide-react";
 import { toast } from "sonner";
+import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
 
 interface LectureNote {
   _id: string;
@@ -44,16 +45,6 @@ interface LectureNote {
   };
   createdAt: string;
 }
-
-const FACULTIES = [
-  "Engineering",
-  "Business",
-  "Arts",
-  "Science",
-  "Health Sciences",
-  "Law",
-  "Education",
-];
 
 const AdminLectureNotesPage = () => {
   const [lectureNotes, setLectureNotes] = useState<LectureNote[]>([]);
@@ -660,7 +651,10 @@ const AdminLectureNotesPage = () => {
                 </label>
                 <Select
                   value={formData.faculty}
-                  onValueChange={(value) => handleFormChange("faculty", value)}
+                  onValueChange={(value) => {
+                    handleFormChange("faculty", value);
+                    handleFormChange("program", "");
+                  }}
                 >
                   <SelectTrigger className="bg-gray-700 border-gray-600 text-white mt-1">
                     <SelectValue />
@@ -678,12 +672,38 @@ const AdminLectureNotesPage = () => {
                 <label className="text-sm font-medium text-gray-300">
                   Program
                 </label>
-                <Input
-                  value={formData.program}
-                  onChange={(e) => handleFormChange("program", e.target.value)}
-                  placeholder="Program"
-                  className="bg-gray-700 border-gray-600 text-white mt-1"
-                />
+                {formData.faculty &&
+                FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                  <Select
+                    value={formData.program}
+                    onValueChange={(value) =>
+                      handleFormChange("program", value)
+                    }
+                  >
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white mt-1">
+                      <SelectValue placeholder="Select program" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-700 border-gray-600">
+                      {FACULTY_PROGRAMS[formData.faculty].map((program) => (
+                        <SelectItem key={program} value={program}>
+                          {program}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={formData.program}
+                    onChange={(e) =>
+                      handleFormChange("program", e.target.value)
+                    }
+                    placeholder={
+                      formData.faculty ? "Program" : "Select a faculty first"
+                    }
+                    disabled={!formData.faculty}
+                    className="bg-gray-700 border-gray-600 text-white mt-1"
+                  />
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-300">

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Eye, Edit, Trash2, UserPlus, GraduationCap } from "lucide-react";
 import { toast } from "sonner";
+import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
 
 interface Student {
   _id: string;
@@ -36,16 +37,6 @@ interface Student {
   createdAt?: string;
   lastLogin?: string;
 }
-
-const FACULTIES = [
-  "Engineering",
-  "Business",
-  "Arts",
-  "Science",
-  "Health Sciences",
-  "Law",
-  "Education",
-];
 
 const AdminStudentsPage = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -398,6 +389,9 @@ const AdminStudentsPage = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
+            id="student-search"
+            name="student-search"
+            autoComplete="off"
             placeholder="Search students by name, email, student ID, or program..."
             value={searchTerm}
             onChange={handleSearch}
@@ -696,6 +690,9 @@ const AdminStudentsPage = () => {
                     First Name *
                   </label>
                   <Input
+                    id="student-form-firstName"
+                    name="firstName"
+                    autoComplete="off"
                     value={formData.firstName}
                     onChange={(e) =>
                       handleFormChange("firstName", e.target.value)
@@ -709,6 +706,9 @@ const AdminStudentsPage = () => {
                     Last Name *
                   </label>
                   <Input
+                    id="student-form-lastName"
+                    name="lastName"
+                    autoComplete="off"
                     value={formData.lastName}
                     onChange={(e) =>
                       handleFormChange("lastName", e.target.value)
@@ -723,7 +723,10 @@ const AdminStudentsPage = () => {
                   Email *
                 </label>
                 <Input
+                  id="student-form-email"
+                  name="email"
                   type="email"
+                  autoComplete="off"
                   value={formData.email}
                   onChange={(e) => handleFormChange("email", e.target.value)}
                   className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
@@ -735,7 +738,10 @@ const AdminStudentsPage = () => {
                   Password {!selectedStudent && "*"}
                 </label>
                 <Input
+                  id="student-form-password"
+                  name="password"
                   type="password"
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={(e) => handleFormChange("password", e.target.value)}
                   className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
@@ -751,6 +757,9 @@ const AdminStudentsPage = () => {
                   Student ID
                 </label>
                 <Input
+                  id="student-form-studentId"
+                  name="studentId"
+                  autoComplete="off"
                   value={formData.studentId}
                   onChange={(e) =>
                     handleFormChange("studentId", e.target.value)
@@ -765,7 +774,10 @@ const AdminStudentsPage = () => {
                 </label>
                 <Select
                   value={formData.faculty}
-                  onValueChange={(value) => handleFormChange("faculty", value)}
+                  onValueChange={(value) => {
+                    handleFormChange("faculty", value);
+                    handleFormChange("program", "");
+                  }}
                 >
                   <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Select faculty" />
@@ -783,12 +795,38 @@ const AdminStudentsPage = () => {
                 <label className="text-sm font-medium text-gray-300">
                   Program *
                 </label>
-                <Input
-                  value={formData.program}
-                  onChange={(e) => handleFormChange("program", e.target.value)}
-                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
-                  placeholder="Program"
-                />
+                {formData.faculty &&
+                FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                  <Select
+                    value={formData.program}
+                    onValueChange={(value) =>
+                      handleFormChange("program", value)
+                    }
+                  >
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                      <SelectValue placeholder="Select program" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-800 border-gray-700">
+                      {FACULTY_PROGRAMS[formData.faculty].map((program) => (
+                        <SelectItem key={program} value={program}>
+                          {program}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={formData.program}
+                    onChange={(e) =>
+                      handleFormChange("program", e.target.value)
+                    }
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
+                    placeholder={
+                      formData.faculty ? "Program" : "Select a faculty first"
+                    }
+                    disabled={!formData.faculty}
+                  />
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-300">

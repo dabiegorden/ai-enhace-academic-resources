@@ -19,6 +19,10 @@ import {
 } from "@/components/ui/select";
 import { Eye, Edit, Trash2, Plus, Users, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import {
+  FACULTY_NAMES as FACULTIES,
+  FACULTY_PROGRAMS,
+} from "@/constants/faculties";
 import AiChatInsightPanel from "@/components/AiChatInsightPanel";
 
 interface ChatRoom {
@@ -34,16 +38,6 @@ interface ChatRoom {
   lastActivity: string;
   createdAt: string;
 }
-
-const FACULTIES = [
-  "Engineering",
-  "Business",
-  "Arts",
-  "Science",
-  "Health Sciences",
-  "Law",
-  "Education",
-];
 
 const typeBadge: Record<string, string> = {
   general: "bg-blue-500/20 text-blue-400",
@@ -336,11 +330,11 @@ const AdminChatRoomPage = () => {
                         <Users className="h-3 w-3" />
                         {room.members?.length ?? 0}
                       </span>
-                      <span>By {room.createdBy.firstName}</span>
-                      {room.type === "course" && room.course && (
-                        <span>{room.course}</span>
+                      <span>By {room?.createdBy?.firstName}</span>
+                      {room.type === "course" && room?.course && (
+                        <span>{room?.course}</span>
                       )}
-                      {room.faculty && <span>{room.faculty}</span>}
+                      {room.faculty && <span>{room?.faculty}</span>}
                     </div>
                   </div>
                   <div
@@ -511,7 +505,9 @@ const AdminChatRoomPage = () => {
             {["faculty", "program"].includes(formData.type) && (
               <Select
                 value={formData.faculty}
-                onValueChange={(v) => setFormData({ ...formData, faculty: v })}
+                onValueChange={(v) =>
+                  setFormData({ ...formData, faculty: v, program: "" })
+                }
               >
                 <SelectTrigger className="border-gray-700 bg-gray-800">
                   <SelectValue placeholder="Select faculty *" />
@@ -525,16 +521,41 @@ const AdminChatRoomPage = () => {
                 </SelectContent>
               </Select>
             )}
-            {formData.type === "program" && (
-              <Input
-                placeholder="Program name *"
-                value={formData.program}
-                onChange={(e) =>
-                  setFormData({ ...formData, program: e.target.value })
-                }
-                className="border-gray-700 bg-gray-800"
-              />
-            )}
+            {formData.type === "program" &&
+              (formData.faculty &&
+              FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                <Select
+                  value={formData.program}
+                  onValueChange={(v) =>
+                    setFormData({ ...formData, program: v })
+                  }
+                >
+                  <SelectTrigger className="border-gray-700 bg-gray-800">
+                    <SelectValue placeholder="Select program *" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                    {FACULTY_PROGRAMS[formData.faculty].map((program) => (
+                      <SelectItem key={program} value={program}>
+                        {program}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  placeholder={
+                    formData.faculty
+                      ? "Program name *"
+                      : "Select a faculty first"
+                  }
+                  value={formData.program}
+                  onChange={(e) =>
+                    setFormData({ ...formData, program: e.target.value })
+                  }
+                  disabled={!formData.faculty}
+                  className="border-gray-700 bg-gray-800"
+                />
+              ))}
           </div>
           <DialogFooter>
             <Button

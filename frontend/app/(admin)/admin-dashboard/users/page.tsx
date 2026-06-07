@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Trash2, Eye, Plus, Edit } from "lucide-react";
 import { toast } from "sonner";
+import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
 
 interface User {
   _id: string;
@@ -36,16 +37,6 @@ interface User {
   createdAt?: string;
   lastLogin?: string;
 }
-
-const FACULTIES = [
-  "Engineering",
-  "Business",
-  "Arts",
-  "Science",
-  "Health Sciences",
-  "Law",
-  "Education",
-];
 
 const AdminUsersPage = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -763,9 +754,10 @@ const AdminUsersPage = () => {
                   </label>
                   <Select
                     value={formData.faculty}
-                    onValueChange={(value) =>
-                      handleFormChange("faculty", value)
-                    }
+                    onValueChange={(value) => {
+                      handleFormChange("faculty", value);
+                      handleFormChange("program", "");
+                    }}
                   >
                     <SelectTrigger className="bg-gray-700 border-gray-600 text-white mt-1">
                       <SelectValue placeholder="Select faculty" />
@@ -800,14 +792,40 @@ const AdminUsersPage = () => {
                     <label className="text-sm font-medium text-gray-300">
                       Program *
                     </label>
-                    <Input
-                      value={formData.program}
-                      onChange={(e) =>
-                        handleFormChange("program", e.target.value)
-                      }
-                      placeholder="Enter program (e.g., Computer Science)"
-                      className="bg-gray-700 border-gray-600 text-white mt-1"
-                    />
+                    {formData.faculty &&
+                    FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                      <Select
+                        value={formData.program}
+                        onValueChange={(value) =>
+                          handleFormChange("program", value)
+                        }
+                      >
+                        <SelectTrigger className="bg-gray-700 border-gray-600 text-white mt-1">
+                          <SelectValue placeholder="Select program" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-700 border-gray-600">
+                          {FACULTY_PROGRAMS[formData.faculty].map((program) => (
+                            <SelectItem key={program} value={program}>
+                              {program}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={formData.program}
+                        onChange={(e) =>
+                          handleFormChange("program", e.target.value)
+                        }
+                        placeholder={
+                          formData.faculty
+                            ? "Enter program"
+                            : "Select a faculty first"
+                        }
+                        disabled={!formData.faculty}
+                        className="bg-gray-700 border-gray-600 text-white mt-1"
+                      />
+                    )}
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-300">

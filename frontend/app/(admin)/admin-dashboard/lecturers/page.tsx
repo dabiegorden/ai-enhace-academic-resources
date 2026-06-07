@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Eye, Edit, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
+import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
 
 interface Lecturer {
   _id: string;
@@ -32,16 +33,6 @@ interface Lecturer {
   createdAt?: string;
   lastLogin?: string;
 }
-
-const FACULTIES = [
-  "Engineering",
-  "Business",
-  "Arts",
-  "Science",
-  "Health Sciences",
-  "Law",
-  "Education",
-];
 
 const AdminLecturersPage = () => {
   const [lecturers, setLecturers] = useState<Lecturer[]>([]);
@@ -342,13 +333,18 @@ const AdminLecturersPage = () => {
 
   const getFacultyColor = (faculty: string) => {
     const colors: Record<string, string> = {
-      Engineering: "from-blue-600 to-cyan-600",
-      Business: "from-green-600 to-emerald-600",
-      Arts: "from-purple-600 to-pink-600",
-      Science: "from-yellow-600 to-orange-600",
-      "Health Sciences": "from-red-600 to-rose-600",
-      Law: "from-indigo-600 to-violet-600",
-      Education: "from-teal-600 to-cyan-600",
+      "Faculty of Religious and Social Sciences": "from-purple-600 to-pink-600",
+      "Faculty of Economics and Business Administration":
+        "from-green-600 to-emerald-600",
+      "Faculty of Computing, Engineering and Mathematical Sciences":
+        "from-blue-600 to-cyan-600",
+      "Faculty of Education": "from-teal-600 to-cyan-600",
+      "School of Public Health and Allied Sciences":
+        "from-red-600 to-rose-600",
+      "School of Nursing and Midwifery": "from-pink-600 to-rose-600",
+      "School of Graduate Studies": "from-indigo-600 to-violet-600",
+      "Faculty of Law": "from-amber-600 to-orange-600",
+      "Medical School": "from-rose-600 to-red-600",
     };
     return colors[faculty] || "from-gray-600 to-gray-600";
   };

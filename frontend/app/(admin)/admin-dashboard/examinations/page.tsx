@@ -543,25 +543,25 @@ export default function AdminExaminationsPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {exams.map((exam) => (
-          <Card key={exam._id}>
+          <Card key={exam?._id}>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
                   <CardTitle>{exam.title}</CardTitle>
                   <CardDescription>
-                    {exam.createdBy.firstName} {exam.createdBy.lastName}
+                    {exam?.createdBy?.firstName} {exam?.createdBy?.lastName}
                   </CardDescription>
                 </div>
-                {getStatusBadge(exam.status)}
+                {getStatusBadge(exam?.status)}
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {exam.status === "active" && exam.startedAt && (
+                {exam?.status === "active" && exam?.startedAt && (
                   <ExamTimer
-                    startedAt={exam.startedAt}
-                    durationInMinutes={exam.durationInMinutes}
-                    onTimeUp={() => handleEndExam(exam._id)}
+                    startedAt={exam?.startedAt}
+                    durationInMinutes={exam?.durationInMinutes}
+                    onTimeUp={() => handleEndExam(exam?._id)}
                   />
                 )}
                 <div className="flex items-center gap-2 text-sm">

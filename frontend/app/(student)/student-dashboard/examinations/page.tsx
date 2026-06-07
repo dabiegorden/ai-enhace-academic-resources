@@ -85,9 +85,15 @@ interface ExamSubmission {
 }
 
 export default function StudentsExamPage() {
-  const [activeTab, setActiveTab] = useState<"exams" | "results">("exams");
+  const [activeTab, setActiveTab] = useState<"exams" | "completed" | "results">(
+    "exams",
+  );
   const [exams, setExams] = useState<Exam[]>([]);
+  const [completedExams, setCompletedExams] = useState<Exam[]>([]);
   const [submissions, setSubmissions] = useState<ExamSubmission[]>([]);
+  const [submittedExamIds, setSubmittedExamIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [loading, setLoading] = useState(true);
 
   // Exam states
@@ -123,10 +129,9 @@ export default function StudentsExamPage() {
 
       const data = await response.json();
       if (data.success) {
-        const activeExams = (data.data || []).filter(
-          (exam: Exam) => exam.status === "active",
-        );
-        setExams(activeExams);
+        const allExams: Exam[] = data.data || [];
+        setExams(allExams.filter((exam) => exam.status === "active"));
+        setCompletedExams(allExams.filter((exam) => exam.status === "ended"));
       } else {
         toast.error(data.message || "Failed to fetch exams");
       }
@@ -138,66 +143,42 @@ export default function StudentsExamPage() {
     }
   }, [token, apiUrl]);
 
-  // Fetch submissions - Note: Backend doesn't have a dedicated my-submissions endpoint
-  // So we fetch all exams and extract submissions for the current user
-  const fetchSubmissions = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${apiUrl}/exams`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        // Extract submissions where this student has submitted
-        const userId = localStorage.getItem("userId");
-        const allExams = data.data || [];
-        const mySubmissions: ExamSubmission[] = [];
-
-        allExams.forEach((exam: any) => {
-          if (exam.submissions && exam.submissions.length > 0) {
-            const studentSubmission = exam.submissions.find(
-              (sub: any) =>
-                sub.studentId === userId || sub.studentId.toString() === userId,
-            );
-            if (studentSubmission) {
-              mySubmissions.push({
-                _id: studentSubmission._id || exam._id,
-                examId: exam._id,
-                examTitle: exam.title,
-                studentId: studentSubmission.studentId,
-                answers: studentSubmission.answers,
-                totalScore: studentSubmission.totalScore,
-                submittedAt: studentSubmission.submittedAt,
-                autoGraded: studentSubmission.autoGraded,
-                exam: {
-                  _id: exam._id,
-                  title: exam.title,
-                  totalPoints: exam.totalPoints,
-                  questions: exam.questions,
-                },
-              });
-            }
-          }
+  // Fetch submissions for the current student via the dedicated backend endpoint
+  const fetchSubmissions = useCallback(
+    async (silent = false) => {
+      try {
+        if (!silent) setLoading(true);
+        const response = await fetch(`${apiUrl}/exams/my-submissions`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
-        setSubmissions(mySubmissions);
-      } else {
-        toast.error(data.message || "Failed to fetch submissions");
+        const data = await response.json();
+        if (data.success) {
+          const mySubmissions: ExamSubmission[] = data.data || [];
+          setSubmissions(mySubmissions);
+          setSubmittedExamIds(
+            new Set(mySubmissions.map((sub) => sub.examId)),
+          );
+        } else {
+          toast.error(data.message || "Failed to fetch submissions");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch submissions");
+        console.error("Fetch error:", error);
+      } finally {
+        if (!silent) setLoading(false);
       }
-    } catch (error) {
-      toast.error("Failed to fetch submissions");
-      console.error("Fetch error:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [token, apiUrl]);
+    },
+    [token, apiUrl],
+  );
 
   useEffect(() => {
-    if (activeTab === "exams") {
+    if (activeTab === "exams" || activeTab === "completed") {
       fetchExams();
+      // Load submitted exam IDs quietly so we can disable retakes
+      fetchSubmissions(true);
     } else if (activeTab === "results") {
       fetchSubmissions();
     }
@@ -240,6 +221,11 @@ export default function StudentsExamPage() {
   };
 
   const handleStartExam = async (exam: Exam) => {
+    if (submittedExamIds.has(exam._id)) {
+      toast.error("You have already submitted this exam");
+      return;
+    }
+
     try {
       const response = await fetch(`${apiUrl}/exams/${exam._id}/student`, {
         headers: {
@@ -317,6 +303,7 @@ export default function StudentsExamPage() {
         toast.success("Exam submitted successfully!");
         setExamSubmitted(true);
         setExamResult(data.data);
+        setSubmittedExamIds((prev) => new Set(prev).add(activeExam._id));
 
         setTimeout(() => {
           setActiveExam(null);
@@ -565,6 +552,14 @@ export default function StudentsExamPage() {
             Active Exams
           </Button>
           <Button
+            onClick={() => setActiveTab("completed")}
+            variant={activeTab === "completed" ? "default" : "outline"}
+            className="flex items-center gap-2"
+          >
+            <Clock className="size-4" />
+            Completed Exams
+          </Button>
+          <Button
             onClick={() => setActiveTab("results")}
             variant={activeTab === "results" ? "default" : "outline"}
             className="flex items-center gap-2"
@@ -600,7 +595,9 @@ export default function StudentsExamPage() {
                   const now = new Date();
                   const startTime = new Date(exam.startedAt);
                   const endTime = new Date(exam.endedAt);
-                  const canStart = now >= startTime && now <= endTime;
+                  const alreadySubmitted = submittedExamIds.has(exam._id);
+                  const canStart =
+                    !alreadySubmitted && now >= startTime && now <= endTime;
                   const hasEnded = now > endTime;
                   const notStarted = now < startTime;
 
@@ -660,6 +657,16 @@ export default function StudentsExamPage() {
                           </p>
                         </div>
 
+                        {alreadySubmitted && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
+                            <CheckCircle className="size-4 text-blue-600 shrink-0 mt-0.5" />
+                            <span className="text-xs text-blue-800">
+                              You have already submitted this exam. Check My
+                              Results for your score.
+                            </span>
+                          </div>
+                        )}
+
                         {notStarted && (
                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
                             <AlertCircle className="size-4 text-yellow-600 shrink-0 mt-0.5" />
@@ -677,20 +684,95 @@ export default function StudentsExamPage() {
                           </div>
                         )}
 
-                        {canStart && (
+                        {alreadySubmitted ? (
                           <Button
-                            onClick={() => handleStartExam(exam)}
-                            className="w-full bg-green-600 hover:bg-green-700"
+                            disabled
+                            className="w-full"
+                            variant="outline"
                             size="sm"
                           >
-                            <Timer className="size-4 mr-2" />
-                            Start Exam
+                            <CheckCircle className="size-4 mr-2" />
+                            Already Submitted
                           </Button>
+                        ) : (
+                          canStart && (
+                            <Button
+                              onClick={() => handleStartExam(exam)}
+                              className="w-full bg-green-600 hover:bg-green-700"
+                              size="sm"
+                            >
+                              <Timer className="size-4 mr-2" />
+                              Start Exam
+                            </Button>
+                          )
                         )}
                       </CardContent>
                     </Card>
                   );
                 })}
+              </div>
+            </>
+          )
+        ) : activeTab === "completed" ? (
+          /* Completed Exams List */
+          completedExams.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Clock className="size-12 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground text-center">
+                  No completed exams found
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Showing {completedExams.length} exam
+                {completedExams.length !== 1 ? "s" : ""}
+              </p>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {completedExams.map((exam) => (
+                  <Card
+                    key={exam._id}
+                    className="hover:shadow-lg transition-shadow"
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Award className="size-4" />
+                          <Badge variant="secondary">Exam</Badge>
+                        </div>
+                        <Badge variant="destructive">Ended</Badge>
+                      </div>
+                      <CardTitle className="line-clamp-2">
+                        {exam.title}
+                      </CardTitle>
+                      <CardDescription>
+                        {exam.questions.length} Questions · {exam.totalPoints}{" "}
+                        Points
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="bg-muted rounded-lg p-3 text-xs space-y-1">
+                        <p className="text-muted-foreground">
+                          <strong>Start:</strong> {formatDate(exam.startedAt)}
+                        </p>
+                        <p className="text-muted-foreground">
+                          <strong>End:</strong> {formatDate(exam.endedAt)}
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => setActiveTab("results")}
+                        variant="outline"
+                        className="w-full"
+                        size="sm"
+                      >
+                        <CheckCircle className="size-4 mr-2" />
+                        View My Results
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </>
           )

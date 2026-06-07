@@ -19,19 +19,10 @@ import {
   Shield,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
 import Image from "next/image";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-const FACULTIES = [
-  "Engineering",
-  "Business",
-  "Arts",
-  "Science",
-  "Health Sciences",
-  "Law",
-  "Education",
-];
 
 const YEARS = [1, 2, 3, 4, 5];
 
@@ -569,7 +560,10 @@ const AdminProfilePage = () => {
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
                 <select
                   value={faculty}
-                  onChange={(e) => setFaculty(e.target.value)}
+                  onChange={(e) => {
+                    setFaculty(e.target.value);
+                    setProgram("");
+                  }}
                   className={`${selectCls} pl-10`}
                 >
                   <option value="" className="bg-gray-900">
@@ -589,12 +583,32 @@ const AdminProfilePage = () => {
                 <Field label="Program / Course">
                   <div className="relative">
                     <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                    <input
-                      value={program}
-                      onChange={(e) => setProgram(e.target.value)}
-                      placeholder="e.g. Computer Science"
-                      className={`${inputCls} pl-10`}
-                    />
+                    {faculty && FACULTY_PROGRAMS[faculty]?.length > 0 ? (
+                      <select
+                        value={program}
+                        onChange={(e) => setProgram(e.target.value)}
+                        className={`${selectCls} pl-10`}
+                      >
+                        <option value="" className="bg-gray-900">
+                          Select program
+                        </option>
+                        {FACULTY_PROGRAMS[faculty].map((p) => (
+                          <option key={p} value={p} className="bg-gray-900">
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={program}
+                        onChange={(e) => setProgram(e.target.value)}
+                        placeholder={
+                          faculty ? "e.g. Computer Science" : "Select a faculty first"
+                        }
+                        disabled={!faculty}
+                        className={`${inputCls} pl-10`}
+                      />
+                    )}
                   </div>
                 </Field>
 

@@ -23,6 +23,11 @@ const router = express.Router();
 // Admin routes
 router.post("/", protect, authorize("lecturer", "admin"), createExam);
 router.get("/", protect, getAllExams);
+
+// Student routes (must be registered before "/:id" so they aren't shadowed)
+router.get("/my-exams", protect, getMyExams);
+router.get("/my-submissions", protect, getMyExamsSubmissions);
+
 router.get("/:id", protect, authorize("lecturer", "admin"), getExamById);
 router.post(
   "/:id/questions",
@@ -53,9 +58,7 @@ router.post(
 router.put("/:id", protect, authorize("lecturer", "admin"), updateExam);
 router.delete("/:id", protect, authorize("lecturer", "admin"), deleteExam);
 
-// Student routes
-router.get("/my-exams", protect, getMyExams);
-router.get("/my-submissions", protect, getMyExamsSubmissions);
+// Student exam-taking routes
 router.get("/:id/student", protect, getExamForStudent);
 router.post("/:id/submit", protect, submitExam);
 
