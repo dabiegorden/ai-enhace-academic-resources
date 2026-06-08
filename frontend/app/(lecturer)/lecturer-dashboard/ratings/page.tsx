@@ -170,8 +170,9 @@ const LecturerRatingsPage = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Semesters</SelectItem>
-                <SelectItem value="1">Semester 1</SelectItem>
-                <SelectItem value="2">Semester 2</SelectItem>
+                <SelectItem value="First Semester">First Semester</SelectItem>
+                <SelectItem value="Second Semester">Second Semester</SelectItem>
+                <SelectItem value="Summer Semester">Summer Semester</SelectItem>
               </SelectContent>
             </Select>
           </div>

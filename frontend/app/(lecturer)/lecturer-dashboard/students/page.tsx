@@ -1,16 +1,8 @@
 "use client";
 
 import type React from "react";
-
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,10 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Eye, Edit, Trash2, UserPlus, GraduationCap } from "lucide-react";
+import { Eye, GraduationCap, X } from "lucide-react";
 import { toast } from "sonner";
-import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
+import { FACULTY_NAMES as FACULTIES } from "@/constants/faculties";
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 interface Student {
   _id: string;
   firstName: string;
@@ -38,6 +33,230 @@ interface Student {
   lastLogin?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Custom Portal Modal — renders on document.body, fully isolated from page tree
+// Keyboard events are trapped inside and NEVER reach background elements.
+// ---------------------------------------------------------------------------
+interface ModalProps {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  maxWidth?: string;
+}
+
+const Modal: React.FC<ModalProps> = ({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  maxWidth = "520px",
+}) => {
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    // Auto-focus first focusable element inside modal
+    const timer = setTimeout(() => {
+      const modal = overlayRef.current;
+      if (!modal) return;
+      const focusable = modal.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length > 0) focusable[0].focus();
+    }, 50);
+
+    // Capture-phase listener — intercepts ALL keystrokes before page receives them
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      // Tab trap
+      if (e.key === "Tab") {
+        const modal = overlayRef.current;
+        if (!modal) return;
+        const focusable = Array.from(
+          modal.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown, true);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("keydown", handleKeyDown, true);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  if (!open || typeof window === "undefined") return null;
+
+  const modal = (
+    <div
+      ref={overlayRef}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+      onKeyUp={(e) => e.stopPropagation()}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        backgroundColor: "rgba(0,0,0,0.75)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        backdropFilter: "blur(3px)",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        style={{
+          background: "#1f2937",
+          border: "1px solid #374151",
+          borderRadius: "14px",
+          width: "100%",
+          maxWidth,
+          maxHeight: "90vh",
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 30px 70px rgba(0,0,0,0.6)",
+          animation: "modalIn 0.18s ease",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "20px 24px 16px",
+            borderBottom: "1px solid #374151",
+            flexShrink: 0,
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              fontSize: "17px",
+              fontWeight: 600,
+              color: "#f9fafb",
+            }}
+          >
+            {title}
+          </h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#9ca3af",
+              padding: "4px",
+              borderRadius: "6px",
+              display: "flex",
+              alignItems: "center",
+              transition: "color 0.15s, background 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "#f9fafb";
+              e.currentTarget.style.background = "#374151";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "#9ca3af";
+              e.currentTarget.style.background = "none";
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "20px 24px", flexGrow: 1 }}>{children}</div>
+
+        {/* Footer */}
+        {footer && (
+          <div
+            style={{
+              padding: "14px 24px 20px",
+              borderTop: "1px solid #374151",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "10px",
+              flexShrink: 0,
+            }}
+          >
+            {footer}
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes modalIn {
+          from { opacity: 0; transform: scale(0.96) translateY(8px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+
+  return ReactDOM.createPortal(modal, document.body);
+};
+
+// ---------------------------------------------------------------------------
+// Detail row helper
+// ---------------------------------------------------------------------------
+const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({
+  label,
+  value,
+}) => (
+  <div style={{ marginBottom: "14px" }}>
+    <p
+      style={{
+        margin: "0 0 3px",
+        fontSize: "12px",
+        color: "#9ca3af",
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+      }}
+    >
+      {label}
+    </p>
+    <p
+      style={{ margin: 0, fontSize: "14px", color: "#f9fafb", fontWeight: 500 }}
+    >
+      {value}
+    </p>
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
 const LecturerStudentPage = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
@@ -45,28 +264,15 @@ const LecturerStudentPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [facultyFilter, setFacultyFilter] = useState<string>("all");
 
-  // Dialog states
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-
-  // Selected student
+  // Only ONE modal: view
+  const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-    studentId: "",
-    faculty: "",
-    program: "",
-    yearOfStudy: "",
-  });
-  const [actionLoading, setActionLoading] = useState(false);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
+  // -------------------------------------------------------------------------
+  // Data
+  // -------------------------------------------------------------------------
   useEffect(() => {
     fetchStudents();
   }, []);
@@ -79,465 +285,392 @@ const LecturerStudentPage = () => {
           Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch students");
-      }
-
+      if (!response.ok) throw new Error("Failed to fetch students");
       const data = await response.json();
-      const studentsList = data.data || data;
-      setStudents(studentsList);
-      filterStudents(studentsList, searchTerm, facultyFilter);
-    } catch (error) {
+      const list = data.data || data;
+      setStudents(list);
+      applyFilters(list, searchTerm, facultyFilter);
+    } catch {
       toast.error("Failed to load students");
-      console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterStudents = (
-    studentList: Student[],
-    search: string,
-    faculty: string,
-  ) => {
-    let filtered = studentList;
-
+  const applyFilters = (list: Student[], search: string, faculty: string) => {
+    let filtered = list;
     if (search) {
-      const searchLower = search.toLowerCase();
+      const s = search.toLowerCase();
       filtered = filtered.filter(
-        (student) =>
-          student.firstName.toLowerCase().includes(searchLower) ||
-          student.lastName.toLowerCase().includes(searchLower) ||
-          student.email.toLowerCase().includes(searchLower) ||
-          (student.studentId?.toLowerCase().includes(searchLower) ?? false) ||
-          student.program.toLowerCase().includes(searchLower),
+        (st) =>
+          st.firstName.toLowerCase().includes(s) ||
+          st.lastName.toLowerCase().includes(s) ||
+          st.email.toLowerCase().includes(s) ||
+          (st.studentId?.toLowerCase().includes(s) ?? false) ||
+          st.program.toLowerCase().includes(s),
       );
     }
-
-    if (faculty !== "all") {
-      filtered = filtered.filter((student) => student.faculty === faculty);
-    }
-
+    if (faculty !== "all")
+      filtered = filtered.filter((st) => st.faculty === faculty);
     setFilteredStudents(filtered);
   };
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
-    filterStudents(students, value, facultyFilter);
+    applyFilters(students, value, facultyFilter);
   };
 
-  const handleFacultyFilterChange = (value: string) => {
+  const handleFacultyFilter = (value: string) => {
     setFacultyFilter(value);
-    filterStudents(students, searchTerm, value);
+    applyFilters(students, searchTerm, value);
   };
 
+  // -------------------------------------------------------------------------
+  // Open view modal — blur background first
+  // -------------------------------------------------------------------------
   const handleViewStudent = (student: Student) => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setSelectedStudent(student);
-    setViewDialogOpen(true);
+    setViewModalOpen(true);
   };
 
-  const handleDeleteClick = (student: Student) => {
-    setSelectedStudent(student);
-    setDeleteDialogOpen(true);
+  // -------------------------------------------------------------------------
+  // Badge helpers
+  // -------------------------------------------------------------------------
+  const yearGradient: Record<number, string> = {
+    1: "linear-gradient(135deg,#2563eb,#0891b2)",
+    2: "linear-gradient(135deg,#16a34a,#059669)",
+    3: "linear-gradient(135deg,#d97706,#ea580c)",
+    4: "linear-gradient(135deg,#7c3aed,#db2777)",
+    5: "linear-gradient(135deg,#dc2626,#e11d48)",
   };
 
-  const handleConfirmDelete = async () => {
-    if (!selectedStudent) return;
+  const statusStyle = (isActive: boolean): React.CSSProperties => ({
+    display: "inline-flex",
+    padding: "3px 10px",
+    borderRadius: "9999px",
+    fontSize: "12px",
+    fontWeight: 500,
+    border: isActive
+      ? "1px solid rgba(74,222,128,0.3)"
+      : "1px solid rgba(248,113,113,0.3)",
+    background: isActive ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)",
+    color: isActive ? "#4ade80" : "#f87171",
+  });
 
-    try {
-      setActionLoading(true);
-      const response = await fetch(`${apiUrl}/users/${selectedStudent._id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete student");
-      }
-
-      const updatedStudents = students.filter(
-        (s) => s._id !== selectedStudent._id,
-      );
-      setStudents(updatedStudents);
-      filterStudents(updatedStudents, searchTerm, facultyFilter);
-      toast.success("Student deleted successfully");
-      setDeleteDialogOpen(false);
-      setSelectedStudent(null);
-    } catch (error) {
-      toast.error("Failed to delete student");
-      console.error(error);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleToggleStatus = async (student: Student) => {
-    try {
-      const response = await fetch(
-        `${apiUrl}/users/${student._id}/toggle-status`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-          },
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to toggle student status");
-      }
-
-      const result = await response.json();
-      const updatedStudent = result.data;
-
-      const updatedStudents = students.map((s) =>
-        s._id === student._id ? updatedStudent : s,
-      );
-      setStudents(updatedStudents);
-      filterStudents(updatedStudents, searchTerm, facultyFilter);
-      toast.success(
-        `Student ${
-          updatedStudent.isActive ? "activated" : "deactivated"
-        } successfully`,
-      );
-    } catch (error) {
-      toast.error("Failed to update student status");
-      console.error(error);
-    }
-  };
-
-  const handleOpenAddDialog = () => {
-    setFormData({
-      firstName: "",
-      lastName: "",
-      email: "",
-      password: "",
-      studentId: "",
-      faculty: "",
-      program: "",
-      yearOfStudy: "",
-    });
-    setSelectedStudent(null);
-    setAddDialogOpen(true);
-  };
-
-  const handleOpenEditDialog = (student: Student) => {
-    setFormData({
-      firstName: student.firstName,
-      lastName: student.lastName,
-      email: student.email,
-      password: "",
-      studentId: student.studentId || "",
-      faculty: student.faculty,
-      program: student.program,
-      yearOfStudy: student.yearOfStudy.toString(),
-    });
-    setSelectedStudent(student);
-    setEditDialogOpen(true);
-  };
-
-  const handleFormChange = (field: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleSaveStudent = async () => {
-    if (!formData.firstName || !formData.lastName || !formData.email) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
-    if (!formData.faculty || !formData.program || !formData.yearOfStudy) {
-      toast.error("Faculty, program, and year of study are required");
-      return;
-    }
-
-    if (!selectedStudent && !formData.password) {
-      toast.error("Password is required for new students");
-      return;
-    }
-
-    try {
-      setActionLoading(true);
-      const payload: any = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        role: "student",
-        faculty: formData.faculty,
-        program: formData.program,
-        yearOfStudy: Number.parseInt(formData.yearOfStudy),
-      };
-
-      if (formData.studentId) {
-        payload.studentId = formData.studentId;
-      }
-
-      if (formData.password) {
-        payload.password = formData.password;
-      }
-
-      if (selectedStudent) {
-        const response = await fetch(`${apiUrl}/users/${selectedStudent._id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to update student");
-        }
-
-        await fetchStudents();
-        toast.success("Student updated successfully");
-        setEditDialogOpen(false);
-      } else {
-        const response = await fetch(`${apiUrl}/auth/register`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to create student");
-        }
-
-        await fetchStudents();
-        toast.success("Student created successfully");
-        setFormData({
-          firstName: "",
-          lastName: "",
-          email: "",
-          password: "",
-          studentId: "",
-          faculty: "",
-          program: "",
-          yearOfStudy: "",
-        });
-
-        setAddDialogOpen(false);
-      }
-    } catch (error: any) {
-      toast.error(
-        error.message ||
-          (selectedStudent
-            ? "Failed to update student"
-            : "Failed to create student"),
-      );
-      console.error(error);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const getStatusBadgeColor = (isActive: boolean) => {
-    return isActive
-      ? "bg-green-500/20 text-green-400 border-green-500/30"
-      : "bg-red-500/20 text-red-400 border-red-500/30";
-  };
-
-  const getYearBadgeColor = (year: number) => {
-    const colors: Record<number, string> = {
-      1: "from-blue-600 to-cyan-600",
-      2: "from-green-600 to-emerald-600",
-      3: "from-yellow-600 to-orange-600",
-      4: "from-purple-600 to-pink-600",
-      5: "from-red-600 to-rose-600",
-    };
-    return colors[year] || "from-gray-600 to-gray-600";
-  };
-
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-gray-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-linear-to-r from-blue-600 to-cyan-600 rounded-lg">
-              <GraduationCap className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-white">
-                Students Management
-              </h1>
-              <p className="text-gray-400 text-sm">
-                Total Students: {filteredStudents.length}
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={handleOpenAddDialog}
-            className="bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
+    <div style={{ minHeight: "100vh", background: "#111827", padding: "24px" }}>
+      <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
+        {/* Header — view only, no Add button */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            marginBottom: "24px",
+          }}
+        >
+          <div
+            style={{
+              padding: "10px",
+              borderRadius: "10px",
+              background: "linear-gradient(135deg,#2563eb,#0891b2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
           >
-            <UserPlus className="w-4 h-4 mr-2" />
-            Add Student
-          </Button>
+            <GraduationCap size={22} color="#fff" />
+          </div>
+          <div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "26px",
+                fontWeight: 700,
+                color: "#f9fafb",
+              }}
+            >
+              Students Management
+            </h1>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "13px",
+                color: "#6b7280",
+                marginTop: "2px",
+              }}
+            >
+              Total Students: {filteredStudents.length}
+            </p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Filters */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 220px",
+            gap: "12px",
+            marginBottom: "20px",
+          }}
+          className="lecturer-filter-grid"
+        >
           <Input
-            id="student-search"
-            name="student-search"
-            autoComplete="off"
-            placeholder="Search students by name, email, student ID, or program..."
+            placeholder="Search by name, email, student ID, or program..."
             value={searchTerm}
             onChange={handleSearch}
             className="bg-gray-800 border-gray-700 text-white placeholder-gray-500"
           />
-          <Select
-            value={facultyFilter}
-            onValueChange={handleFacultyFilterChange}
-          >
+          <Select value={facultyFilter} onValueChange={handleFacultyFilter}>
             <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
               <SelectValue placeholder="Filter by faculty" />
             </SelectTrigger>
             <SelectContent className="bg-gray-800 border-gray-700">
               <SelectItem value="all">All Faculties</SelectItem>
-              {FACULTIES.map((faculty) => (
-                <SelectItem key={faculty} value={faculty}>
-                  {faculty}
+              {FACULTIES.map((f) => (
+                <SelectItem key={f} value={f}>
+                  {f}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Students Table */}
-        <div className="border border-gray-700 rounded-lg overflow-hidden bg-gray-800">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-750 border-b border-gray-700">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Student
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Student ID
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Faculty
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Program
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Year
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Actions
-                  </th>
+        {/* Table */}
+        <div
+          style={{
+            border: "1px solid #374151",
+            borderRadius: "10px",
+            overflow: "hidden",
+            background: "#1f2937",
+          }}
+        >
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: "1px solid #374151",
+                    background: "#111827",
+                  }}
+                >
+                  {[
+                    "Student",
+                    "Student ID",
+                    "Faculty",
+                    "Program",
+                    "Year",
+                    "Status",
+                    "",
+                  ].map((h, i) => (
+                    <th
+                      key={i}
+                      style={{
+                        padding: "12px 20px",
+                        textAlign: i === 6 ? "right" : "left",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        color: "#9ca3af",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700">
+              <tbody>
                 {loading ? (
                   <tr>
                     <td
                       colSpan={7}
-                      className="px-6 py-8 text-center text-gray-500"
+                      style={{
+                        padding: "48px",
+                        textAlign: "center",
+                        color: "#6b7280",
+                      }}
                     >
-                      Loading students...
+                      Loading students…
                     </td>
                   </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
                     <td
                       colSpan={7}
-                      className="px-6 py-8 text-center text-gray-500"
+                      style={{
+                        padding: "48px",
+                        textAlign: "center",
+                        color: "#6b7280",
+                      }}
                     >
                       No students found
                     </td>
                   </tr>
                 ) : (
-                  filteredStudents.map((student) => (
+                  filteredStudents.map((student, idx) => (
                     <tr
                       key={student._id}
-                      className="hover:bg-gray-800/50 transition-colors"
+                      style={{
+                        borderBottom:
+                          idx < filteredStudents.length - 1
+                            ? "1px solid #374151"
+                            : "none",
+                        transition: "background 0.1s",
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.background =
+                          "rgba(255,255,255,0.03)")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.background = "transparent")
+                      }
                     >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="shrink-0 h-10 w-10 bg-linear-to-r from-blue-600 to-cyan-600 rounded-full flex items-center justify-center">
-                            <span className="text-white font-medium">
-                              {student.firstName[0]}
-                              {student.lastName[0]}
-                            </span>
+                      {/* Student name + avatar */}
+                      <td
+                        style={{ padding: "14px 20px", whiteSpace: "nowrap" }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "38px",
+                              height: "38px",
+                              borderRadius: "50%",
+                              background:
+                                "linear-gradient(135deg,#2563eb,#0891b2)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                              fontSize: "13px",
+                              fontWeight: 600,
+                              color: "#fff",
+                            }}
+                          >
+                            {student.firstName[0]}
+                            {student.lastName[0]}
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-200">
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: 500,
+                                color: "#e5e7eb",
+                              }}
+                            >
                               {student.firstName} {student.lastName}
                             </div>
-                            <div className="text-sm text-gray-400">Student</div>
+                            <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                              {student.email}
+                            </div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+
+                      <td
+                        style={{
+                          padding: "14px 20px",
+                          fontSize: "13px",
+                          color: "#9ca3af",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {student.studentId || "N/A"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      <td
+                        style={{
+                          padding: "14px 20px",
+                          fontSize: "13px",
+                          color: "#9ca3af",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {student.faculty}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      <td
+                        style={{
+                          padding: "14px 20px",
+                          fontSize: "13px",
+                          color: "#9ca3af",
+                        }}
+                      >
                         {student.program}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td
+                        style={{ padding: "14px 20px", whiteSpace: "nowrap" }}
+                      >
                         <span
-                          className={`inline-flex px-3 py-1 rounded-full text-xs font-medium text-white bg-linear-to-r ${getYearBadgeColor(
-                            student.yearOfStudy,
-                          )}`}
+                          style={{
+                            display: "inline-flex",
+                            padding: "3px 10px",
+                            borderRadius: "9999px",
+                            fontSize: "12px",
+                            fontWeight: 500,
+                            color: "#fff",
+                            background:
+                              yearGradient[student.yearOfStudy] ||
+                              "linear-gradient(135deg,#4b5563,#374151)",
+                          }}
                         >
                           Year {student.yearOfStudy}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => handleToggleStatus(student)}
-                          className={`inline-flex px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors border ${getStatusBadgeColor(
-                            student.isActive,
-                          )}`}
-                        >
+                      <td
+                        style={{ padding: "14px 20px", whiteSpace: "nowrap" }}
+                      >
+                        <span style={statusStyle(student.isActive)}>
                           {student.isActive ? "Active" : "Inactive"}
-                        </button>
+                        </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
+
+                      {/* View only — no edit or delete */}
+                      <td
+                        style={{
+                          padding: "14px 20px",
+                          textAlign: "right",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <button
                           onClick={() => handleViewStudent(student)}
-                          className="text-blue-400 hover:text-blue-300 hover:bg-gray-700"
+                          title="View student"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            color: "#60a5fa",
+                            padding: "7px",
+                            borderRadius: "7px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            transition: "background 0.1s, color 0.1s",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "#374151";
+                            e.currentTarget.style.color = "#93c5fd";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "none";
+                            e.currentTarget.style.color = "#60a5fa";
+                          }}
                         >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleOpenEditDialog(student)}
-                          className="text-yellow-400 hover:text-yellow-300 hover:bg-gray-700"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteClick(student)}
-                          className="text-red-400 hover:text-red-300 hover:bg-gray-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                          <Eye size={16} />
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -546,333 +679,159 @@ const LecturerStudentPage = () => {
             </table>
           </div>
         </div>
+      </div>
 
-        {/* View Dialog */}
-        <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-          <DialogContent className="bg-gray-800 border-gray-700 text-white">
-            <DialogHeader>
-              <DialogTitle>Student Details</DialogTitle>
-            </DialogHeader>
-            {selectedStudent && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-gray-400 text-sm">First Name</p>
-                    <p className="text-white font-medium">
-                      {selectedStudent.firstName}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400 text-sm">Last Name</p>
-                    <p className="text-white font-medium">
-                      {selectedStudent.lastName}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Email</p>
-                  <p className="text-white font-medium">
-                    {selectedStudent.email}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Student ID</p>
-                  <p className="text-white font-medium">
-                    {selectedStudent.studentId || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Faculty</p>
-                  <p className="text-white font-medium">
-                    {selectedStudent.faculty}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Program</p>
-                  <p className="text-white font-medium">
-                    {selectedStudent.program}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Year of Study</p>
-                  <p className="text-white font-medium">
-                    Year {selectedStudent.yearOfStudy}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Status</p>
-                  <p className="text-white font-medium">
-                    {selectedStudent.isActive ? "Active" : "Inactive"}
-                  </p>
-                </div>
-                {selectedStudent.createdAt && (
-                  <div>
-                    <p className="text-gray-400 text-sm">Joined</p>
-                    <p className="text-white font-medium">
-                      {new Date(selectedStudent.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                )}
-                {selectedStudent.lastLogin && (
-                  <div>
-                    <p className="text-gray-400 text-sm">Last Login</p>
-                    <p className="text-white font-medium">
-                      {new Date(selectedStudent.lastLogin).toLocaleString()}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-            <DialogFooter>
-              <Button
-                onClick={() => setViewDialogOpen(false)}
-                variant="ghost"
-                className="text-gray-300 hover:bg-gray-700"
+      {/* ------------------------------------------------------------------ */}
+      {/* VIEW MODAL — portal, fully isolated                                */}
+      {/* ------------------------------------------------------------------ */}
+      <Modal
+        open={viewModalOpen}
+        onClose={() => setViewModalOpen(false)}
+        title="Student Details"
+        footer={
+          <button
+            onClick={() => setViewModalOpen(false)}
+            style={{
+              background: "#374151",
+              border: "none",
+              borderRadius: "8px",
+              padding: "9px 20px",
+              color: "#f9fafb",
+              fontSize: "14px",
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#4b5563")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#374151")}
+          >
+            Close
+          </button>
+        }
+      >
+        {selectedStudent && (
+          <div>
+            {/* Avatar + name banner */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                padding: "16px",
+                background: "#111827",
+                borderRadius: "10px",
+                marginBottom: "20px",
+              }}
+            >
+              <div
+                style={{
+                  width: "52px",
+                  height: "52px",
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg,#2563eb,#0891b2)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "18px",
+                  fontWeight: 700,
+                  color: "#fff",
+                  flexShrink: 0,
+                }}
               >
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <DialogContent className="bg-gray-800 border-gray-700 text-white">
-            <DialogHeader>
-              <DialogTitle>Delete Student</DialogTitle>
-            </DialogHeader>
-            <p className="text-gray-300">
-              Are you sure you want to delete{" "}
-              <span className="font-medium">
-                {selectedStudent?.firstName} {selectedStudent?.lastName}
-              </span>
-              ? This action cannot be undone.
-            </p>
-            <DialogFooter>
-              <Button
-                onClick={() => setDeleteDialogOpen(false)}
-                variant="ghost"
-                className="text-gray-300 hover:bg-gray-700"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleConfirmDelete}
-                disabled={actionLoading}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                {actionLoading ? "Deleting..." : "Delete"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Add/Edit Dialog */}
-        <Dialog
-          open={addDialogOpen || editDialogOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              setAddDialogOpen(false);
-              setEditDialogOpen(false);
-            }
-          }}
-        >
-          <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {selectedStudent ? "Edit Student" : "Add New Student"}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">
-                    First Name *
-                  </label>
-                  <Input
-                    id="student-form-firstName"
-                    name="firstName"
-                    autoComplete="off"
-                    value={formData.firstName}
-                    onChange={(e) =>
-                      handleFormChange("firstName", e.target.value)
-                    }
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
-                    placeholder="First name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">
-                    Last Name *
-                  </label>
-                  <Input
-                    id="student-form-lastName"
-                    name="lastName"
-                    autoComplete="off"
-                    value={formData.lastName}
-                    onChange={(e) =>
-                      handleFormChange("lastName", e.target.value)
-                    }
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
-                    placeholder="Last name"
-                  />
-                </div>
+                {selectedStudent.firstName[0]}
+                {selectedStudent.lastName[0]}
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">
-                  Email *
-                </label>
-                <Input
-                  id="student-form-email"
-                  name="email"
-                  type="email"
-                  autoComplete="off"
-                  value={formData.email}
-                  onChange={(e) => handleFormChange("email", e.target.value)}
-                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
-                  placeholder="Email"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">
-                  Password {!selectedStudent && "*"}
-                </label>
-                <Input
-                  id="student-form-password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={formData.password}
-                  onChange={(e) => handleFormChange("password", e.target.value)}
-                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
-                  placeholder={
-                    selectedStudent
-                      ? "Leave blank to keep current password"
-                      : "Password"
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">
-                  Student ID
-                </label>
-                <Input
-                  id="student-form-studentId"
-                  name="studentId"
-                  autoComplete="off"
-                  value={formData.studentId}
-                  onChange={(e) =>
-                    handleFormChange("studentId", e.target.value)
-                  }
-                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
-                  placeholder="Student ID (optional)"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">
-                  Faculty *
-                </label>
-                <Select
-                  value={formData.faculty}
-                  onValueChange={(value) => {
-                    handleFormChange("faculty", value);
-                    handleFormChange("program", "");
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "16px",
+                    fontWeight: 600,
+                    color: "#f9fafb",
                   }}
                 >
-                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
-                    <SelectValue placeholder="Select faculty" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
-                    {FACULTIES.map((faculty) => (
-                      <SelectItem key={faculty} value={faculty}>
-                        {faculty}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">
-                  Program *
-                </label>
-                {formData.faculty &&
-                FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
-                  <Select
-                    value={formData.program}
-                    onValueChange={(value) =>
-                      handleFormChange("program", value)
-                    }
-                  >
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
-                      <SelectValue placeholder="Select program" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700">
-                      {FACULTY_PROGRAMS[formData.faculty].map((program) => (
-                        <SelectItem key={program} value={program}>
-                          {program}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    value={formData.program}
-                    onChange={(e) =>
-                      handleFormChange("program", e.target.value)
-                    }
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-500"
-                    placeholder={
-                      formData.faculty ? "Program" : "Select a faculty first"
-                    }
-                    disabled={!formData.faculty}
-                  />
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">
-                  Year of Study *
-                </label>
-                <Select
-                  value={formData.yearOfStudy}
-                  onValueChange={(value) =>
-                    handleFormChange("yearOfStudy", value)
-                  }
+                  {selectedStudent.firstName} {selectedStudent.lastName}
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "13px",
+                    color: "#6b7280",
+                    marginTop: "2px",
+                  }}
                 >
-                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
-                    <SelectValue placeholder="Select year" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
-                    <SelectItem value="1">Year 1</SelectItem>
-                    <SelectItem value="2">Year 2</SelectItem>
-                    <SelectItem value="3">Year 3</SelectItem>
-                    <SelectItem value="4">Year 4</SelectItem>
-                    <SelectItem value="5">Year 5</SelectItem>
-                  </SelectContent>
-                </Select>
+                  {selectedStudent.email}
+                </p>
               </div>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={() => {
-                  setAddDialogOpen(false);
-                  setEditDialogOpen(false);
+              {/* Status pill */}
+              <span
+                style={{
+                  ...statusStyle(selectedStudent.isActive),
+                  marginLeft: "auto",
+                  flexShrink: 0,
                 }}
-                variant="ghost"
-                className="text-gray-300 hover:bg-gray-700"
               >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveStudent}
-                disabled={actionLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {actionLoading ? "Saving..." : "Save"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+                {selectedStudent.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+
+            {/* Two-column detail grid */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "0 24px",
+              }}
+            >
+              <DetailRow
+                label="Student ID"
+                value={selectedStudent.studentId || "N/A"}
+              />
+              <DetailRow
+                label="Year of Study"
+                value={
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      padding: "2px 10px",
+                      borderRadius: "9999px",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      color: "#fff",
+                      background:
+                        yearGradient[selectedStudent.yearOfStudy] || "#374151",
+                    }}
+                  >
+                    Year {selectedStudent.yearOfStudy}
+                  </span>
+                }
+              />
+              <DetailRow label="Faculty" value={selectedStudent.faculty} />
+              <DetailRow label="Program" value={selectedStudent.program} />
+              {selectedStudent.createdAt && (
+                <DetailRow
+                  label="Joined"
+                  value={new Date(
+                    selectedStudent.createdAt,
+                  ).toLocaleDateString()}
+                />
+              )}
+              {selectedStudent.lastLogin && (
+                <DetailRow
+                  label="Last Login"
+                  value={new Date(selectedStudent.lastLogin).toLocaleString()}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Responsive */}
+      <style>{`
+        @media (max-width: 640px) {
+          .lecturer-filter-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 };

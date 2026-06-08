@@ -42,73 +42,215 @@ interface LecturerData {
   faculty?: string;
 }
 
+interface CourseData {
+  course: string;
+  courseCode: string;
+}
+
+// ─── Course Picker ────────────────────────────────────────────────────────────
+function CoursePicker({
+  courses,
+  isLoading,
+  selected,
+  onSelect,
+  search,
+  onSearchChange,
+}: {
+  courses: CourseData[];
+  isLoading: boolean;
+  selected: CourseData | null;
+  onSelect: (course: CourseData | null) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+}) {
+  const filteredCourses = courses.filter((c) =>
+    `${c.course} ${c.courseCode}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase()),
+  );
+
+  const searchInput = (
+    <input
+      value={search}
+      onChange={(e) => onSearchChange(e.target.value)}
+      placeholder="Type to search course by name or code..."
+      className="w-full rounded-xl bg-gray-900/70 border border-gray-700 text-white placeholder-gray-600 px-4 py-3 text-sm focus:outline-none focus:border-orange-500/70 focus:ring-1 focus:ring-orange-500/30 transition-all mb-2"
+    />
+  );
+
+  if (isLoading) {
+    return (
+      <div>
+        {searchInput}
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+          <div className="h-4 w-4 border-2 border-gray-600 border-t-orange-400 rounded-full animate-spin" />
+          Loading courses...
+        </div>
+      </div>
+    );
+  }
+
+  if (courses.length === 0) {
+    return (
+      <div>
+        {searchInput}
+        <div className="py-6 text-center text-sm text-gray-500">
+          No courses found.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {searchInput}
+      {filteredCourses.length === 0 && (
+        <div className="py-6 text-center text-sm text-gray-500">
+          No courses match &quot;{search}&quot;.
+        </div>
+      )}
+      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+        {filteredCourses.map((c) => {
+          const isSelected = selected?.courseCode === c.courseCode;
+          return (
+            <button
+              key={c.courseCode}
+              type="button"
+              onClick={() => onSelect(isSelected ? null : c)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-150 border ${
+                isSelected
+                  ? "bg-blue-500/10 border-blue-500/40 ring-1 ring-blue-500/30"
+                  : "bg-gray-900/50 border-gray-700/40 hover:bg-gray-800/60 hover:border-gray-600/50"
+              }`}
+            >
+              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-linear-to-br from-blue-500 to-orange-500 shrink-0">
+                <BookOpen className="h-4 w-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p
+                  className={`text-sm font-medium truncate ${isSelected ? "text-blue-300" : "text-white"}`}
+                >
+                  {c.course}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  {c.courseCode}
+                </p>
+              </div>
+              {isSelected && (
+                <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Lecturer Picker ──────────────────────────────────────────────────────────
 function LecturerPicker({
   lecturers,
   isLoading,
   selected,
   onSelect,
+  search,
+  onSearchChange,
 }: {
   lecturers: LecturerData[];
   isLoading: boolean;
   selected: { id: string; name: string } | null;
   onSelect: (lecturer: { id: string; name: string } | null) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
 }) {
+  const filteredLecturers = lecturers.filter((lec) =>
+    `${lec.firstName} ${lec.lastName}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase()),
+  );
+
+  const searchInput = (
+    <input
+      value={search}
+      onChange={(e) => onSearchChange(e.target.value)}
+      placeholder="Type to search lecturer by name..."
+      className="w-full rounded-xl bg-gray-900/70 border border-gray-700 text-white placeholder-gray-600 px-4 py-3 text-sm focus:outline-none focus:border-orange-500/70 focus:ring-1 focus:ring-orange-500/30 transition-all mb-2"
+    />
+  );
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
-        <div className="h-4 w-4 border-2 border-gray-600 border-t-orange-400 rounded-full animate-spin" />
-        Loading lecturers...
+      <div>
+        {searchInput}
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+          <div className="h-4 w-4 border-2 border-gray-600 border-t-orange-400 rounded-full animate-spin" />
+          Loading lecturers...
+        </div>
       </div>
     );
   }
 
   if (lecturers.length === 0) {
     return (
-      <div className="py-6 text-center text-sm text-gray-500">
-        No lecturers found.
+      <div>
+        {searchInput}
+        <div className="py-6 text-center text-sm text-gray-500">
+          No lecturers found.
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-      {lecturers.map((lec) => {
-        const name = `${lec.firstName} ${lec.lastName}`;
-        const isSelected = selected?.id === lec._id;
-        return (
-          <button
-            key={lec._id}
-            type="button"
-            onClick={() => onSelect(isSelected ? null : { id: lec._id, name })}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-150 border ${
-              isSelected
-                ? "bg-blue-500/10 border-blue-500/40 ring-1 ring-blue-500/30"
-                : "bg-gray-900/50 border-gray-700/40 hover:bg-gray-800/60 hover:border-gray-600/50"
-            }`}
-          >
-            <div className="flex items-center justify-center w-9 h-9 rounded-full bg-linear-to-br from-blue-500 to-orange-500 shrink-0">
-              <span className="text-xs font-bold text-white">
-                {lec.firstName[0]}
-                {lec.lastName[0]}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p
-                className={`text-sm font-medium truncate ${isSelected ? "text-blue-300" : "text-white"}`}
-              >
-                {name}
-              </p>
-              {lec.faculty && (
-                <p className="text-xs text-gray-500 truncate">{lec.faculty}</p>
+    <div className="space-y-2">
+      {searchInput}
+      {filteredLecturers.length === 0 && (
+        <div className="py-6 text-center text-sm text-gray-500">
+          No lecturers match &quot;{search}&quot;.
+        </div>
+      )}
+      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+        {filteredLecturers.map((lec) => {
+          const name = `${lec.firstName} ${lec.lastName}`;
+          const isSelected = selected?.id === lec._id;
+          return (
+            <button
+              key={lec._id}
+              type="button"
+              onClick={() =>
+                onSelect(isSelected ? null : { id: lec._id, name })
+              }
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-150 border ${
+                isSelected
+                  ? "bg-blue-500/10 border-blue-500/40 ring-1 ring-blue-500/30"
+                  : "bg-gray-900/50 border-gray-700/40 hover:bg-gray-800/60 hover:border-gray-600/50"
+              }`}
+            >
+              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-linear-to-br from-blue-500 to-orange-500 shrink-0">
+                <span className="text-xs font-bold text-white">
+                  {lec.firstName[0]}
+                  {lec.lastName[0]}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p
+                  className={`text-sm font-medium truncate ${isSelected ? "text-blue-300" : "text-white"}`}
+                >
+                  {name}
+                </p>
+                {lec.faculty && (
+                  <p className="text-xs text-gray-500 truncate">
+                    {lec.faculty}
+                  </p>
+                )}
+              </div>
+              {isSelected && (
+                <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0" />
               )}
-            </div>
-            {isSelected && (
-              <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0" />
-            )}
-          </button>
-        );
-      })}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -227,8 +369,9 @@ const StudentsRatingsPage = () => {
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form state
-  const [course, setCourse] = useState("");
-  const [courseCode, setCourseCode] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState<CourseData | null>(
+    null,
+  );
   const [selectedLecturer, setSelectedLecturer] = useState<{
     id: string;
     name: string;
@@ -251,6 +394,10 @@ const StudentsRatingsPage = () => {
   const [submitted, setSubmitted] = useState(false);
   const [lecturers, setLecturers] = useState<LecturerData[]>([]);
   const [lecturersLoading, setLecturersLoading] = useState(false);
+  const [lecturerSearch, setLecturerSearch] = useState("");
+  const [courses, setCourses] = useState<CourseData[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [courseSearch, setCourseSearch] = useState("");
 
   useEffect(() => {
     fetchAverage();
@@ -258,13 +405,14 @@ const StudentsRatingsPage = () => {
 
   useEffect(() => {
     fetchLecturers();
+    fetchCourses();
   }, []);
 
   const fetchLecturers = async () => {
     setLecturersLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${apiUrl}/users?role=lecturer`, {
+      const res = await fetch(`${apiUrl}/users/lecturers`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -273,6 +421,32 @@ const StudentsRatingsPage = () => {
       // silently fail
     } finally {
       setLecturersLoading(false);
+    }
+  };
+
+  const fetchCourses = async () => {
+    setCoursesLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${apiUrl}/notes/my-notes?limit=200`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        const seen = new Set<string>();
+        const unique: CourseData[] = [];
+        for (const note of data.data) {
+          if (note.courseCode && !seen.has(note.courseCode)) {
+            seen.add(note.courseCode);
+            unique.push({ course: note.course, courseCode: note.courseCode });
+          }
+        }
+        setCourses(unique);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setCoursesLoading(false);
     }
   };
 
@@ -290,9 +464,10 @@ const StudentsRatingsPage = () => {
   };
 
   const resetForm = () => {
-    setCourse("");
-    setCourseCode("");
+    setSelectedCourse(null);
+    setCourseSearch("");
     setSelectedLecturer(null);
+    setLecturerSearch("");
     setRating(0);
     setComment("");
     setIsAnonymous(true);
@@ -311,8 +486,8 @@ const StudentsRatingsPage = () => {
       toast.error("Please provide an overall rating");
       return;
     }
-    if (activeTab === "course" && (!course || !courseCode)) {
-      toast.error("Please fill in course name and code");
+    if (activeTab === "course" && !selectedCourse) {
+      toast.error("Please select a course");
       return;
     }
     if (activeTab === "lecturer" && !selectedLecturer) {
@@ -333,8 +508,8 @@ const StudentsRatingsPage = () => {
         aspects,
       };
       if (activeTab === "course") {
-        payload.course = course;
-        payload.courseCode = courseCode;
+        payload.course = selectedCourse!.course;
+        payload.courseCode = selectedCourse!.courseCode;
       } else {
         payload.lecturer = selectedLecturer!.id;
       }
@@ -501,29 +676,27 @@ const StudentsRatingsPage = () => {
                     <div className="space-y-5">
                       {/* Course / Lecturer fields */}
                       {activeTab === "course" ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
                             <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                              Course Name *
+                              Select Course *
                             </label>
-                            <input
-                              value={course}
-                              onChange={(e) => setCourse(e.target.value)}
-                              placeholder="e.g. Software Engineering"
-                              className="w-full rounded-xl bg-gray-900/70 border border-gray-700 text-white placeholder-gray-600 px-4 py-3 text-sm focus:outline-none focus:border-orange-500/70 focus:ring-1 focus:ring-orange-500/30 transition-all"
-                            />
+                            {selectedCourse && (
+                              <span className="text-xs text-green-400 flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" />
+                                {selectedCourse.course} (
+                                {selectedCourse.courseCode})
+                              </span>
+                            )}
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                              Course Code *
-                            </label>
-                            <input
-                              value={courseCode}
-                              onChange={(e) => setCourseCode(e.target.value)}
-                              placeholder="e.g. CS 301"
-                              className="w-full rounded-xl bg-gray-900/70 border border-gray-700 text-white placeholder-gray-600 px-4 py-3 text-sm focus:outline-none focus:border-orange-500/70 focus:ring-1 focus:ring-orange-500/30 transition-all"
-                            />
-                          </div>
+                          <CoursePicker
+                            courses={courses}
+                            isLoading={coursesLoading}
+                            selected={selectedCourse}
+                            onSelect={setSelectedCourse}
+                            search={courseSearch}
+                            onSearchChange={setCourseSearch}
+                          />
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -543,6 +716,8 @@ const StudentsRatingsPage = () => {
                             isLoading={lecturersLoading}
                             selected={selectedLecturer}
                             onSelect={setSelectedLecturer}
+                            search={lecturerSearch}
+                            onSearchChange={setLecturerSearch}
                           />
                         </div>
                       )}
@@ -633,9 +808,9 @@ const StudentsRatingsPage = () => {
                           }
                           if (
                             activeTab === "course" &&
-                            (!course || !courseCode)
+                            !selectedCourse
                           ) {
-                            toast.error("Please fill in course name and code");
+                            toast.error("Please select a course");
                             return;
                           }
                           if (activeTab === "lecturer" && !selectedLecturer) {

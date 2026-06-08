@@ -34,16 +34,16 @@ export const adminSidebarItems = [
         url: "/admin-dashboard/users",
         icon: Users,
       },
-      {
-        title: "Lecturers",
-        url: "/admin-dashboard/lecturers",
-        icon: BookOpen,
-      },
-      {
-        title: "Students",
-        url: "/admin-dashboard/students",
-        icon: Users,
-      },
+      // {
+      //   title: "Lecturers",
+      //   url: "/admin-dashboard/lecturers",
+      //   icon: BookOpen,
+      // },
+      // {
+      //   title: "Students",
+      //   url: "/admin-dashboard/students",
+      //   icon: Users,
+      // },
     ],
   },
   {

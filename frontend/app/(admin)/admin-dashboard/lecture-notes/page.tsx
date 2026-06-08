@@ -21,7 +21,10 @@ import {
 } from "@/components/ui/select";
 import { Eye, Edit, Trash2, BookOpen, Download } from "lucide-react";
 import { toast } from "sonner";
-import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
+import {
+  FACULTY_NAMES as FACULTIES,
+  FACULTY_PROGRAMS,
+} from "@/constants/faculties";
 
 interface LectureNote {
   _id: string;
@@ -520,15 +523,15 @@ const AdminLectureNotesPage = () => {
                 <div>
                   <p className="text-gray-400 text-sm">Uploaded By</p>
                   <p className="text-white font-medium">
-                    {selectedNote.uploadedBy.firstName}{" "}
-                    {selectedNote.uploadedBy.lastName}
+                    {selectedNote?.uploadedBy?.firstName}{" "}
+                    {selectedNote?.uploadedBy?.lastName}
                   </p>
                 </div>
-                {selectedNote.tags.length > 0 && (
+                {selectedNote?.tags?.length > 0 && (
                   <div>
                     <p className="text-gray-400 text-sm">Tags</p>
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {selectedNote.tags.map((tag) => (
+                      {selectedNote?.tags?.map((tag) => (
                         <span
                           key={tag}
                           className="inline-flex px-2 py-1 rounded-full text-xs font-medium text-white bg-blue-600/30 border border-blue-500/30"

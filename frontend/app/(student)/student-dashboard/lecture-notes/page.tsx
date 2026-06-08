@@ -121,6 +121,27 @@ interface QuizState {
   endTime?: number;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Strips leftover Markdown syntax (#, **, _, backticks, links, etc.) from
+ * AI-generated text so older cached summaries also render as clean plain text.
+ */
+const stripMarkdown = (text: string) =>
+  text
+    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, ""))
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/_(.*?)_/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/^>\s?/gm, "")
+    .replace(/^[ \t]*[-*+]\s+/gm, "• ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 function StudentsViewLectureNotes() {
@@ -278,7 +299,7 @@ function StudentsViewLectureNotes() {
     setSelectedNote(note);
     setAiSummaryDialogOpen(true);
     if (note.aiSummary) {
-      setAiSummary(note.aiSummary);
+      setAiSummary(stripMarkdown(note.aiSummary));
       return;
     }
     try {
@@ -293,7 +314,7 @@ function StudentsViewLectureNotes() {
       });
       const data = await response.json();
       if (data.success) {
-        setAiSummary(data.data.summary);
+        setAiSummary(stripMarkdown(data.data.summary));
         toast.success("Summary generated");
         fetchNotes();
       } else throw new Error(data.message);

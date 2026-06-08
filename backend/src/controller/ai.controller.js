@@ -38,6 +38,26 @@ const buildTranscript = (messages, limit = 60) => {
 };
 
 /**
+ * Strips common Markdown syntax (headings, bold/italic, bullets, code
+ * fences, etc.) so AI output renders as clean plain text in the UI.
+ */
+const stripMarkdown = (text) =>
+  text
+    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, ""))
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/_(.*?)_/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/^>\s?/gm, "")
+    .replace(/^[ \t]*[-*+]\s+/gm, "• ")
+    .replace(/^[ \t]*\d+\.\s+/gm, (m) => m.trimStart())
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+/**
  * Builds a concise context block from a LectureNote document for use
  * in AI prompts — avoids repeating the same interpolation everywhere.
  */
@@ -79,15 +99,18 @@ Summarise the following lecture note clearly and concisely for students.
 
 ${buildNoteContext(lectureNote)}
 
-Provide:
+Structure your response as:
 1. A brief overview (2-3 sentences)
-2. Key concepts covered (bullet points)
+2. Key concepts covered
 3. Important points to remember
 
-Keep the summary academic but accessible.`;
+Keep the summary academic but accessible. Respond in plain text only —
+do NOT use Markdown formatting (no #, ##, **, *, _, backticks, or
+[links](url)). For lists, start each item on its own line with a
+simple dash "-" followed by a space.`;
 
     const result = await model.generateContent(prompt);
-    const summary = result.response.text();
+    const summary = stripMarkdown(result.response.text());
 
     lectureNote.aiSummary = summary;
     await lectureNote.save();
