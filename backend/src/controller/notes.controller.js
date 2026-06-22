@@ -2,8 +2,20 @@ import LectureNote from "../models/lecturenote.model.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import streamifier from "streamifier";
+import cloudinary from "../config/cloudinary.js";
 import { broadcastNotification } from "../controller/notification.controller.js";
 import User from "../models/user.model.js";
+
+// Upload a file buffer to Cloudinary and resolve with the result.
+const uploadBufferToCloudinary = (buffer, folder) =>
+  new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: "auto" },
+      (error, result) => (error ? reject(error) : resolve(result)),
+    );
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +33,20 @@ const ALLOWED_FILE_TYPES = new Set([
 // ─── Helper: derive and validate file extension ───────────────────────────────
 const getFileExtension = (filename) =>
   path.extname(filename).slice(1).toLowerCase();
+
+// ─── Helper: can a given student see this note? ───────────────────────────────
+// Supports two "General" scopes requested by faculty:
+//   • faculty === "General"  → course offered to the WHOLE SCHOOL (all students)
+//   • program === "General"  → course offered to the WHOLE FACULTY (all programs)
+// Otherwise the note is specific to a faculty + program + year of study.
+const studentCanSeeNote = (note, user) => {
+  if (note.faculty === "General") return true; // whole school
+  if (note.faculty !== user.faculty) return false;
+  if (note.program === "General") return true; // whole faculty
+  return (
+    note.program === user.program && note.yearOfStudy === user.yearOfStudy
+  );
+};
 
 // ─── Upload lecture note ──────────────────────────────────────────────────────
 // @route  POST /api/notes
@@ -41,6 +67,7 @@ export const uploadLectureNote = async (req, res) => {
       faculty,
       program,
       yearOfStudy,
+      semester,
       tags,
     } = req.body;
 
@@ -52,10 +79,6 @@ export const uploadLectureNote = async (req, res) => {
       !program ||
       !yearOfStudy
     ) {
-      // Clean up orphaned file before responding
-      const fp = path.join(assignmentsDir, req.file.filename);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-
       return res.status(400).json({
         success: false,
         message: "Please provide all required fields",
@@ -67,9 +90,6 @@ export const uploadLectureNote = async (req, res) => {
     // Double-check extension against the allowed set (belt-and-suspenders guard
     // on top of the multer filter)
     if (!ALLOWED_FILE_TYPES.has(fileExtension)) {
-      const fp = path.join(assignmentsDir, req.file.filename);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-
       return res.status(400).json({
         success: false,
         message:
@@ -77,7 +97,11 @@ export const uploadLectureNote = async (req, res) => {
       });
     }
 
-    const lectureNote = await LectureNote.create({
+    // Storage strategy:
+    //   • PDFs  → saved on the local server so they preview/open correctly in
+    //             the browser (Cloudinary mangles PDF delivery).
+    //   • Images → uploaded to Cloudinary.
+    const noteFields = {
       title,
       description,
       course,
@@ -85,13 +109,31 @@ export const uploadLectureNote = async (req, res) => {
       faculty,
       program,
       yearOfStudy: parseInt(yearOfStudy),
-      filename: req.file.filename,
+      semester: semester === "2" ? "2" : "1",
       originalName: req.file.originalname,
       fileType: fileExtension,
       fileSize: req.file.size,
       uploadedBy: req.user.id,
       tags: tags ? JSON.parse(tags) : [],
-    });
+    };
+
+    if (fileExtension === "pdf") {
+      const base = path
+        .basename(req.file.originalname, path.extname(req.file.originalname))
+        .replace(/[^a-zA-Z0-9-_]/g, "_");
+      const diskName = `${base}-${Date.now()}-${Math.round(Math.random() * 1e9)}.pdf`;
+      fs.writeFileSync(path.join(assignmentsDir, diskName), req.file.buffer);
+      noteFields.filename = diskName;
+    } else {
+      const uploadResult = await uploadBufferToCloudinary(
+        req.file.buffer,
+        "cug-lecture-notes",
+      );
+      noteFields.fileUrl = uploadResult.secure_url;
+      noteFields.cloudinaryId = uploadResult.public_id;
+    }
+
+    const lectureNote = await LectureNote.create(noteFields);
 
     await lectureNote.populate("uploadedBy", "firstName lastName email");
 
@@ -128,11 +170,6 @@ export const uploadLectureNote = async (req, res) => {
       data: lectureNote,
     });
   } catch (error) {
-    // Clean up file if Mongoose save fails
-    if (req.file) {
-      const fp = path.join(assignmentsDir, req.file.filename);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    }
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -146,6 +183,7 @@ export const getAllLectureNotes = async (req, res) => {
       faculty,
       program,
       yearOfStudy,
+      semester,
       course,
       search,
       page = 1,
@@ -156,6 +194,7 @@ export const getAllLectureNotes = async (req, res) => {
     if (faculty) query.faculty = faculty;
     if (program) query.program = program;
     if (yearOfStudy) query.yearOfStudy = parseInt(yearOfStudy);
+    if (semester) query.semester = semester;
     if (course) query.course = { $regex: course, $options: "i" };
     if (search) {
       query.$or = [
@@ -206,19 +245,12 @@ export const getLectureNoteById = async (req, res) => {
         .json({ success: false, message: "Lecture note not found" });
     }
 
-    if (req.user.role === "student") {
-      const isEnrolled =
-        lectureNote.faculty === req.user.faculty &&
-        lectureNote.program === req.user.program &&
-        lectureNote.yearOfStudy === req.user.yearOfStudy;
-
-      if (!isEnrolled) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "Access denied. This lecture note is not for your enrolled program.",
-        });
-      }
+    if (req.user.role === "student" && !studentCanSeeNote(lectureNote, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Access denied. This lecture note is not for your enrolled program.",
+      });
     }
 
     lectureNote.views += 1;
@@ -313,7 +345,17 @@ export const deleteLectureNote = async (req, res) => {
       });
     }
 
-    if (lectureNote.filename) {
+    // Remove the underlying file: Cloudinary asset if present, otherwise the
+    // legacy local-disk file.
+    if (lectureNote.cloudinaryId) {
+      try {
+        await cloudinary.uploader.destroy(lectureNote.cloudinaryId, {
+          resource_type: "auto",
+        });
+      } catch (err) {
+        console.error("Cloudinary delete error:", err.message);
+      }
+    } else if (lectureNote.filename) {
       const filePath = path.join(assignmentsDir, lectureNote.filename);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
@@ -345,39 +387,37 @@ export const downloadLectureNote = async (req, res) => {
         .json({ success: false, message: "Lecture note not found" });
     }
 
-    if (req.user.role === "student") {
-      const isEnrolled =
-        lectureNote.faculty === req.user.faculty &&
-        lectureNote.program === req.user.program &&
-        lectureNote.yearOfStudy === req.user.yearOfStudy;
-
-      if (!isEnrolled) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "Access denied. This lecture note is not for your enrolled program.",
-        });
-      }
-    }
-
-    if (!lectureNote.filename) {
-      return res.status(404).json({
+    // Students may download notes available to them (own program/year,
+    // whole-faculty, or whole-school "General" notes).
+    if (req.user.role === "student" && !studentCanSeeNote(lectureNote, req.user)) {
+      return res.status(403).json({
         success: false,
-        message: "File not found for this lecture note",
+        message:
+          "Access denied. This lecture note is not for your enrolled program.",
       });
     }
 
-    const filePath = path.join(assignmentsDir, lectureNote.filename);
-    if (!fs.existsSync(filePath)) {
-      return res
-        .status(404)
-        .json({ success: false, message: "File not found on server" });
+    // Resolve the deliverable URL — prefer Cloudinary, fall back to legacy
+    // local-disk files for any notes uploaded before the Cloudinary switch.
+    let fileUrl = lectureNote.fileUrl;
+    if (!fileUrl) {
+      if (!lectureNote.filename) {
+        return res.status(404).json({
+          success: false,
+          message: "File not found for this lecture note",
+        });
+      }
+      const filePath = path.join(assignmentsDir, lectureNote.filename);
+      if (!fs.existsSync(filePath)) {
+        return res
+          .status(404)
+          .json({ success: false, message: "File not found on server" });
+      }
+      fileUrl = `${req.protocol}://${req.get("host")}/uploads/assignments/${lectureNote.filename}`;
     }
 
     lectureNote.downloads += 1;
     await lectureNote.save();
-
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/assignments/${lectureNote.filename}`;
 
     res.status(200).json({
       success: true,
@@ -406,21 +446,25 @@ export const previewLectureNote = async (req, res) => {
         .json({ success: false, message: "Lecture note not found" });
     }
 
-    if (req.user.role === "student") {
-      const isEnrolled =
-        lectureNote.faculty === req.user.faculty &&
-        lectureNote.program === req.user.program &&
-        lectureNote.yearOfStudy === req.user.yearOfStudy;
-
-      if (!isEnrolled) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "Access denied. This lecture note is not for your enrolled program.",
-        });
-      }
+    // Students may preview notes available to them (own program/year,
+    // whole-faculty, or whole-school "General" notes).
+    if (req.user.role === "student" && !studentCanSeeNote(lectureNote, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Access denied. This lecture note is not for your enrolled program.",
+      });
     }
 
+    lectureNote.views += 1;
+    await lectureNote.save();
+
+    // Cloudinary-stored note → redirect the browser straight to the file.
+    if (lectureNote.fileUrl) {
+      return res.redirect(lectureNote.fileUrl);
+    }
+
+    // Legacy local-disk fallback
     if (!lectureNote.filename) {
       return res.status(404).json({
         success: false,
@@ -434,9 +478,6 @@ export const previewLectureNote = async (req, res) => {
         .status(404)
         .json({ success: false, message: "File not found on server" });
     }
-
-    lectureNote.views += 1;
-    await lectureNote.save();
 
     const contentTypes = {
       pdf: "application/pdf",
@@ -457,11 +498,6 @@ export const previewLectureNote = async (req, res) => {
     );
 
     fs.createReadStream(filePath).pipe(res);
-
-    console.log("Preview ID:", req.params.id);
-    console.log("Filename:", lectureNote.filename);
-    console.log("Resolved path:", filePath);
-    console.log("Exists:", fs.existsSync(filePath));
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -487,25 +523,39 @@ export const getMyLectureNotes = async (req, res) => {
       });
     }
 
-    const { courseCode, search, page = 1, limit = 20 } = req.query;
+    const { courseCode, semester, search, page = 1, limit = 20 } = req.query;
 
-    const query = {
-      faculty: req.user.faculty,
-      program: req.user.program,
-      yearOfStudy: req.user.yearOfStudy,
-    };
+    // Visibility: own program/year notes, whole-faculty ("General" program)
+    // notes, and whole-school ("General" faculty) notes.
+    const visibilityOr = [
+      { faculty: "General" },
+      { faculty: req.user.faculty, program: "General" },
+      {
+        faculty: req.user.faculty,
+        program: req.user.program,
+        yearOfStudy: req.user.yearOfStudy,
+      },
+    ];
 
-    if (courseCode) query.courseCode = { $regex: courseCode, $options: "i" };
+    const andConditions = [{ $or: visibilityOr }];
+
+    if (courseCode)
+      andConditions.push({ courseCode: { $regex: courseCode, $options: "i" } });
+    if (semester) andConditions.push({ semester });
 
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { course: { $regex: search, $options: "i" } },
-        { courseCode: { $regex: search, $options: "i" } },
-        { tags: { $in: [new RegExp(search, "i")] } },
-      ];
+      andConditions.push({
+        $or: [
+          { title: { $regex: search, $options: "i" } },
+          { description: { $regex: search, $options: "i" } },
+          { course: { $regex: search, $options: "i" } },
+          { courseCode: { $regex: search, $options: "i" } },
+          { tags: { $in: [new RegExp(search, "i")] } },
+        ],
+      });
     }
+
+    const query = { $and: andConditions };
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -653,4 +703,15 @@ export const regenerateAiContent = async (req, res) => {
 };
 
 // ─── Path constant (shared by upload / delete / preview / download) ───────────
-const assignmentsDir = path.join(__dirname, "../public/uploads/assignments");
+// Must match the directory that server.js serves statically at /uploads so
+// that PDFs written here are reachable for in-browser preview/download.
+const isVercel = process.env.VERCEL === "1";
+const uploadsRoot = isVercel
+  ? "/tmp/uploads"
+  : path.join(process.cwd(), "src/public/uploads");
+const assignmentsDir = path.join(uploadsRoot, "assignments");
+
+// Ensure the directory exists before we write PDF files into it.
+if (!fs.existsSync(assignmentsDir)) {
+  fs.mkdirSync(assignmentsDir, { recursive: true });
+}

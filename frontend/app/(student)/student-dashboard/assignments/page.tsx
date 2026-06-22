@@ -636,10 +636,11 @@ const StudentsAssignments = () => {
                   type="file"
                   onChange={handleFileChange}
                   className="mt-2"
-                  accept=".pdf,.doc,.docx,.txt,.zip"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.gif"
                 />
                 <p className="text-xs text-muted-foreground mt-2">
-                  Supported formats: PDF, DOC, DOCX, TXT, ZIP (Max 10MB)
+                  Supported formats: PDF and images (JPG, PNG, WEBP, GIF) (Max
+                  10MB)
                 </p>
               </div>
 

@@ -35,6 +35,7 @@ interface LectureNote {
   faculty: string;
   program: string;
   yearOfStudy: number;
+  semester?: string;
   fileUrl: string;
   fileType: string;
   fileSize: number;
@@ -71,6 +72,7 @@ const AdminLectureNotesPage = () => {
     faculty: "",
     program: "",
     yearOfStudy: "",
+    semester: "1",
     tags: "",
   });
   const [actionLoading, setActionLoading] = useState(false);
@@ -194,6 +196,7 @@ const AdminLectureNotesPage = () => {
       faculty: note.faculty,
       program: note.program,
       yearOfStudy: note.yearOfStudy.toString(),
+      semester: note.semester || "1",
       tags: note.tags.join(", "),
     });
     setSelectedNote(note);
@@ -223,6 +226,7 @@ const AdminLectureNotesPage = () => {
         faculty: formData.faculty,
         program: formData.program,
         yearOfStudy: Number.parseInt(formData.yearOfStudy),
+        semester: formData.semester,
         tags: formData.tags
           .split(",")
           .map((tag) => tag.trim())
@@ -663,6 +667,10 @@ const AdminLectureNotesPage = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-700 border-gray-600">
+                    {/* General = course offered to the WHOLE SCHOOL */}
+                    <SelectItem value="General">
+                      General (Whole School)
+                    </SelectItem>
                     {FACULTIES.map((faculty) => (
                       <SelectItem key={faculty} value={faculty}>
                         {faculty}
@@ -676,6 +684,7 @@ const AdminLectureNotesPage = () => {
                   Program
                 </label>
                 {formData.faculty &&
+                formData.faculty !== "General" &&
                 FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
                   <Select
                     value={formData.program}
@@ -687,6 +696,10 @@ const AdminLectureNotesPage = () => {
                       <SelectValue placeholder="Select program" />
                     </SelectTrigger>
                     <SelectContent className="bg-gray-700 border-gray-600">
+                      {/* General = course offered to the WHOLE FACULTY */}
+                      <SelectItem value="General">
+                        General (Whole Faculty)
+                      </SelectItem>
                       {FACULTY_PROGRAMS[formData.faculty].map((program) => (
                         <SelectItem key={program} value={program}>
                           {program}
@@ -727,6 +740,25 @@ const AdminLectureNotesPage = () => {
                     <SelectItem value="3">Year 3</SelectItem>
                     <SelectItem value="4">Year 4</SelectItem>
                     <SelectItem value="5">Year 5</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-300">
+                  Semester *
+                </label>
+                <Select
+                  value={formData.semester}
+                  onValueChange={(value) =>
+                    handleFormChange("semester", value)
+                  }
+                >
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-700 border-gray-600">
+                    <SelectItem value="1">Semester 1</SelectItem>
+                    <SelectItem value="2">Semester 2</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

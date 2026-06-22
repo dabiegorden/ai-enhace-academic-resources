@@ -55,10 +55,12 @@ interface LectureNote {
   faculty: string;
   program: string;
   yearOfStudy: number;
+  semester?: string;
   filename: string;
   originalName: string;
   fileType: string;
   fileSize: number;
+  fileUrl?: string;
   uploadedBy: {
     _id: string;
     firstName: string;
@@ -93,6 +95,7 @@ const LecturerNotesPage = () => {
     faculty: "",
     program: "",
     yearOfStudy: "",
+    semester: "1",
     tags: "",
   });
 
@@ -135,14 +138,14 @@ const LecturerNotesPage = () => {
       const file = e.target.files[0];
       const allowedTypes = [
         "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
       ];
 
       if (!allowedTypes.includes(file.type)) {
-        toast.error("Only PDF, DOC, DOCX, PPT, and PPTX files are allowed");
+        toast.error("Only PDF and image files (JPG, PNG, WEBP, GIF) are allowed");
         return;
       }
 
@@ -176,6 +179,7 @@ const LecturerNotesPage = () => {
       uploadFormData.append("faculty", formData.faculty);
       uploadFormData.append("program", formData.program);
       uploadFormData.append("yearOfStudy", formData.yearOfStudy);
+      uploadFormData.append("semester", formData.semester);
       uploadFormData.append("tags", JSON.stringify(formData.tags.split(",")));
 
       const response = await fetch(`${apiUrl}/notes`, {
@@ -202,6 +206,7 @@ const LecturerNotesPage = () => {
         faculty: "",
         program: "",
         yearOfStudy: "",
+        semester: "1",
         tags: "",
       });
       setSelectedFile(null);
@@ -296,112 +301,56 @@ const LecturerNotesPage = () => {
   };
 
   const handleDownload = async (note: LectureNote) => {
-    if (!note.filename) {
-      toast.error("No file available for download");
-      return;
-    }
-
     try {
-      // Try the API endpoint first
-      const downloadUrl = `${apiUrl}/notes/${note._id}/download`;
-      console.log("[v0] Attempting download from API:", downloadUrl);
-
-      let response = await fetch(downloadUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      // The download endpoint returns the deliverable URL (Cloudinary, or a
+      // legacy local-disk URL) plus the original filename.
+      const response = await fetch(`${apiUrl}/notes/${note._id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      console.log("[v0] API response status:", response.status);
-
-      // If API endpoint fails, try direct file access
-      if (!response.ok) {
-        console.log("[v0] API endpoint failed, trying direct file access");
-        const directUrl = `${apiUrl}/uploads/assignments/${note.filename}`;
-        console.log("[v0] Trying direct URL:", directUrl);
-
-        response = await fetch(directUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        console.log("[v0] Direct file response status:", response.status);
-
-        if (!response.ok) {
-          throw new Error(`File not accessible: ${response.status}`);
-        }
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "File not available");
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = note.originalName;
+      a.href = data.data.fileUrl;
+      a.download = data.data.filename || note.originalName;
+      a.target = "_blank";
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
       toast.success("Download started");
       fetchNotes();
     } catch (error) {
-      console.error("[v0] Download error:", error);
+      console.error("Download error:", error);
       toast.error(
-        "Failed to download file. The file may not exist on the server.",
+        error instanceof Error ? error.message : "Failed to download file.",
       );
     }
   };
 
   const handlePreview = async (note: LectureNote) => {
-    if (!note.filename) {
-      toast.error("No file available for preview");
+    // Cloudinary-hosted notes can be opened directly.
+    if (note.fileUrl) {
+      window.open(note.fileUrl, "_blank");
+      fetchNotes();
       return;
     }
 
+    // Legacy local-disk notes — stream via the preview endpoint.
     try {
-      // Try the API endpoint first
-      const previewUrl = `${apiUrl}/notes/${note._id}/preview`;
-      console.log("[v0] Attempting preview from API:", previewUrl);
-
-      let response = await fetch(previewUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const response = await fetch(`${apiUrl}/notes/${note._id}/preview`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      console.log("[v0] API response status:", response.status);
-
-      // If API endpoint fails, try direct file access
-      if (!response.ok) {
-        console.log("[v0] API endpoint failed, trying direct file access");
-        const directUrl = `${apiUrl}/uploads/assignments/${note.filename}`;
-        console.log("[v0] Trying direct URL:", directUrl);
-
-        response = await fetch(directUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        console.log("[v0] Direct file response status:", response.status);
-
-        if (!response.ok) {
-          throw new Error(`File not accessible: ${response.status}`);
-        }
-      }
-
+      if (!response.ok) throw new Error(`File not accessible: ${response.status}`);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       window.open(url, "_blank");
-
-      // Refresh to update view count
       fetchNotes();
     } catch (error) {
-      console.error("[v0] Preview error:", error);
-      toast.error(
-        "Failed to preview file. The file may not exist on the server.",
-      );
+      console.error("Preview error:", error);
+      toast.error("Failed to preview file. The file may not exist.");
     }
   };
 
@@ -415,6 +364,7 @@ const LecturerNotesPage = () => {
       faculty: note.faculty,
       program: note.program,
       yearOfStudy: note.yearOfStudy.toString(),
+      semester: note.semester || "1",
       tags: note.tags.join(", "),
     });
     setEditDialogOpen(true);
@@ -682,6 +632,10 @@ const LecturerNotesPage = () => {
                     <SelectValue placeholder="Select faculty" />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* General = course offered to the WHOLE SCHOOL */}
+                    <SelectItem value="General">
+                      General (Whole School)
+                    </SelectItem>
                     {faculties.map((faculty) => (
                       <SelectItem key={faculty} value={faculty}>
                         {faculty}
@@ -706,6 +660,12 @@ const LecturerNotesPage = () => {
                     <SelectValue placeholder="Select program" />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* General = course offered to the WHOLE FACULTY */}
+                    {formData.faculty && formData.faculty !== "General" && (
+                      <SelectItem value="General">
+                        General (Whole Faculty)
+                      </SelectItem>
+                    )}
                     {formData.faculty &&
                       programs[formData.faculty as keyof typeof programs]?.map(
                         (program) => (
@@ -719,27 +679,49 @@ const LecturerNotesPage = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="yearOfStudy">
-                Year of Study <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.yearOfStudy}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, yearOfStudy: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[1, 2, 3, 4, 5].map((year) => (
-                    <SelectItem key={year} value={year.toString()}>
-                      Year {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="yearOfStudy">
+                  Year of Study <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.yearOfStudy}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, yearOfStudy: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5].map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        Year {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="semester">
+                  Semester <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.semester}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, semester: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select semester" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Semester 1</SelectItem>
+                    <SelectItem value="2">Semester 2</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -762,7 +744,7 @@ const LecturerNotesPage = () => {
                 <Input
                   id="file"
                   type="file"
-                  accept=".pdf,.doc,.docx,.ppt,.pptx"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.gif"
                   onChange={handleFileChange}
                 />
                 {selectedFile && (
@@ -783,7 +765,7 @@ const LecturerNotesPage = () => {
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
-                Accepted formats: PDF, DOC, DOCX, PPT, PPTX
+                Accepted formats: PDF and images (JPG, PNG, WEBP, GIF)
               </p>
             </div>
           </div>

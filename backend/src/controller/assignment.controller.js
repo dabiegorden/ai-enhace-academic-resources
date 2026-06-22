@@ -133,6 +133,10 @@ export const getAllAssignments = async (req, res) => {
       limit = 20,
     } = req.query;
     const query = {};
+    // Lecturers only see assignments they created (not other lecturers').
+    if (req.user.role === "lecturer") {
+      query.lecturer = req.user.id;
+    }
     if (faculty) query.faculty = faculty;
     if (program) query.program = program;
     if (yearOfStudy) query.yearOfStudy = parseInt(yearOfStudy);

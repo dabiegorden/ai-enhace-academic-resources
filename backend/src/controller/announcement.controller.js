@@ -99,12 +99,28 @@ export const getAllAnnouncements = async (req, res) => {
   try {
     const { type, faculty, page = 1, limit = 20 } = req.query;
 
-    const query = {};
-    if (type) query.type = type;
-    if (faculty) query.faculty = faculty;
+    const andConditions = [];
+    if (type) andConditions.push({ type });
+    if (faculty) andConditions.push({ faculty });
 
     // Only show non-expired announcements
-    query.$or = [{ expiryDate: { $gte: new Date() } }, { expiryDate: null }];
+    andConditions.push({
+      $or: [{ expiryDate: { $gte: new Date() } }, { expiryDate: null }],
+    });
+
+    // Faculty scoping: students and lecturers only see faculty-type
+    // announcements for their OWN faculty. General/academic/event/urgent
+    // announcements remain visible to everyone. Admins see everything.
+    if (req.user.role !== "admin") {
+      andConditions.push({
+        $or: [
+          { type: { $ne: "faculty" } },
+          { type: "faculty", faculty: req.user.faculty },
+        ],
+      });
+    }
+
+    const query = { $and: andConditions };
 
     const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
 
@@ -143,6 +159,18 @@ export const getAnnouncementById = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Announcement not found",
+      });
+    }
+
+    // Faculty-type announcements are only viewable by members of that faculty
+    if (
+      req.user.role !== "admin" &&
+      announcement.type === "faculty" &&
+      announcement.faculty !== req.user.faculty
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This announcement is restricted to its faculty.",
       });
     }
 

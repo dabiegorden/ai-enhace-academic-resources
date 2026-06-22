@@ -49,7 +49,7 @@ interface ChatRoom {
     firstName: string;
     lastName: string;
   };
-  members: string[];
+  members: Array<string | { _id: string }>;
   lastActivity: string;
   messages?: Message[];
   totalMessages?: number;
@@ -72,8 +72,20 @@ const StudentChatRooms = () => {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  // The login flow stores the signed-in user as a JSON object under "user"
+  // (NOT a bare "userId" key). Reading the wrong key left userId null, so
+  // membership detection (isMember) and own-message highlighting always
+  // failed — which is why students appeared unable to join/chat.
   const userId =
-    typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+    typeof window !== "undefined"
+      ? (() => {
+          try {
+            return JSON.parse(localStorage.getItem("user") || "{}")._id || null;
+          } catch {
+            return null;
+          }
+        })()
+      : null;
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -272,9 +284,14 @@ const StudentChatRooms = () => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
 
-  // Check if user is room member
+  // Check if user is room member. Members may arrive either as raw id strings
+  // (list endpoints) or as populated user objects (room detail endpoint), so
+  // handle both shapes.
   const isMember = (room: ChatRoom) => {
-    return room.members.includes(userId || "");
+    if (!userId) return false;
+    return room.members.some((m) =>
+      typeof m === "string" ? m === userId : m?._id === userId,
+    );
   };
 
   // Format timestamp

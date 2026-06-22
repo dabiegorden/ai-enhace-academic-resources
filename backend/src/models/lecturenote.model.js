@@ -55,11 +55,27 @@ const lectureNoteSchema = new mongoose.Schema(
       type: Number,
       required: [true, "Year of study is required"],
     },
+    // Semester the note belongs to: "1" or "2". Defaults to "1" for legacy
+    // notes created before this field existed.
+    semester: {
+      type: String,
+      enum: ["1", "2"],
+      default: "1",
+    },
 
     // ── File fields — PDF and images only ──────────────────────────────────
+    // Files are stored on Cloudinary (persistent across deploys/machines).
+    // `fileUrl` is the public delivery URL and `cloudinaryId` the public_id
+    // used for deletion. `filename` is kept for backwards-compatibility with
+    // any legacy notes that were stored on the local disk.
+    fileUrl: {
+      type: String,
+    },
+    cloudinaryId: {
+      type: String,
+    },
     filename: {
       type: String,
-      required: [true, "Filename is required"],
     },
     originalName: {
       type: String,

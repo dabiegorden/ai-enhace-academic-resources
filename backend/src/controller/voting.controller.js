@@ -566,6 +566,7 @@ export const getAllVoting = async (req, res) => {
         votingObj.candidates = votingObj.candidates.map((c) => ({
           ...c,
           votes: undefined,
+          noVotes: undefined,
         }));
         votingObj.yesNoTallies = votingObj.yesNoTallies.map((t) => ({
           position: t.position,
@@ -635,6 +636,7 @@ export const getVotingById = async (req, res) => {
       votingData.candidates = votingData.candidates.map((c) => ({
         ...c,
         votes: undefined,
+        noVotes: undefined,
       }));
       votingData.yesNoTallies = votingData.yesNoTallies.map((t) => ({
         position: t.position,
@@ -799,15 +801,36 @@ export const castVote = async (req, res) => {
         });
       }
 
-      candidate.votes += 1;
+      // Unopposed candidate → Yes/No approval ballot. When a position has only
+      // one candidate the frontend sends a yesNo value; "yes" approves
+      // (counts as a vote), "no" rejects.
+      const candidatesForPosition = voting.candidates.filter(
+        (c) => c.position === candidate.position,
+      );
+      const isUnopposed = candidatesForPosition.length === 1;
 
-      voting.voteRecords.push({
-        voter: req.user.id,
-        candidateId,
-        position: candidate.position,
-        yesNo: null,
-        votedAt: new Date(),
-      });
+      if (isUnopposed && (yesNo === "yes" || yesNo === "no")) {
+        if (yesNo === "yes") candidate.votes += 1;
+        else candidate.noVotes += 1;
+
+        voting.voteRecords.push({
+          voter: req.user.id,
+          candidateId,
+          position: candidate.position,
+          yesNo,
+          votedAt: new Date(),
+        });
+      } else {
+        candidate.votes += 1;
+
+        voting.voteRecords.push({
+          voter: req.user.id,
+          candidateId,
+          position: candidate.position,
+          yesNo: null,
+          votedAt: new Date(),
+        });
+      }
 
       await voting.save();
 

@@ -7,6 +7,11 @@ const ratingSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    // Faculty of the rating (taken from the rating student's faculty) so
+    // students/lecturers from other faculties cannot see it.
+    faculty: {
+      type: String,
+    },
     type: {
       type: String,
       enum: ["course", "lecturer"],

@@ -86,6 +86,7 @@ interface LectureNote {
   originalName: string;
   fileType: string;
   fileSize: number;
+  fileUrl?: string;
   uploadedBy: {
     firstName: string;
     lastName: string;
@@ -255,6 +256,15 @@ function StudentsViewLectureNotes() {
     setPreviewDialogOpen(true);
     setPreviewLoading(true);
     setPreviewUrl(null);
+
+    // Cloudinary-hosted notes can be previewed directly from their URL.
+    if (note.fileUrl) {
+      setPreviewUrl(note.fileUrl);
+      setPreviewLoading(false);
+      return;
+    }
+
+    // Legacy local-disk notes — stream via the preview endpoint.
     try {
       const response = await fetch(`${apiUrl}/notes/${note._id}/preview`, {
         headers: { Authorization: `Bearer ${token}` },

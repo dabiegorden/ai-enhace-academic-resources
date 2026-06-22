@@ -7,18 +7,26 @@ export const startExamScheduler = () => {
     try {
       console.log("[v0] Checking for expired exams...");
 
-      // Find all active exams
-      const activeExams = await Exam.find({ status: "active" });
+      // Find all active exams.
+      //
+      // Exams now use PER-STUDENT timing (each student gets durationInMinutes
+      // from when they personally start), so we no longer auto-close an exam
+      // just because durationInMinutes has elapsed since the lecturer started
+      // it — that was the cause of the "exam expired" bug for students who
+      // joined later. The exam stays open until the lecturer ends it, OR until
+      // an explicit global endedAt (if one was set) is reached.
+      const activeExams = await Exam.find({
+        status: "active",
+        endedAt: { $ne: null, $exists: true },
+      });
 
       for (const exam of activeExams) {
-        if (!exam.startedAt) continue;
+        if (!exam.endedAt) continue;
 
-        const startTime = new Date(exam.startedAt).getTime();
-        const durationInMs = exam.durationInMinutes * 60 * 1000;
-        const endTime = startTime + durationInMs;
+        const endTime = new Date(exam.endedAt).getTime();
         const now = Date.now();
 
-        // If current time has passed the end time, end the exam
+        // If current time has passed the global end time, end the exam
         if (now >= endTime) {
           console.log(
             `[v0] Auto-ending expired exam: ${exam.title} (${exam._id})`,

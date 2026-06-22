@@ -583,7 +583,7 @@ export default function AdminAssignmentsPage() {
                 type="file"
                 multiple
                 onChange={handleFileSelect}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.gif"
               />
               {selectedFiles.length > 0 && (
                 <div className="mt-2 space-y-2">

@@ -41,79 +41,6 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-// Inline ExamTimer Component
-function ExamTimer({
-  startedAt,
-  durationInMinutes,
-  onTimeUp,
-}: {
-  startedAt: string;
-  durationInMinutes: number;
-  onTimeUp: () => void;
-}) {
-  const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const [hasEnded, setHasEnded] = useState(false);
-
-  useEffect(() => {
-    const calculateTimeRemaining = () => {
-      const start = new Date(startedAt).getTime();
-      const end = start + durationInMinutes * 60 * 1000;
-      const now = Date.now();
-      const remaining = Math.max(0, end - now);
-      return Math.floor(remaining / 1000); // in seconds
-    };
-
-    setTimeRemaining(calculateTimeRemaining());
-
-    const interval = setInterval(() => {
-      const remaining = calculateTimeRemaining();
-      setTimeRemaining(remaining);
-
-      if (remaining <= 0 && !hasEnded) {
-        setHasEnded(true);
-        onTimeUp();
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [startedAt, durationInMinutes, onTimeUp, hasEnded]);
-
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-    }
-    return `${minutes}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  const getColorClass = () => {
-    if (timeRemaining <= 0) return "text-red-600 font-bold";
-    if (timeRemaining < 60) return "text-red-600 font-bold animate-pulse";
-    if (timeRemaining < 300) return "text-orange-500 font-semibold";
-    return "text-green-600 font-semibold";
-  };
-
-  return (
-    <div
-      className={`flex items-center gap-2 text-lg p-3 rounded-lg border-2 ${
-        timeRemaining < 60
-          ? "border-red-500 bg-red-50 animate-pulse"
-          : timeRemaining < 300
-            ? "border-orange-400 bg-orange-50"
-            : "border-green-500 bg-green-50"
-      }`}
-    >
-      <Clock className="size-5" />
-      <span className={getColorClass()}>
-        {timeRemaining > 0 ? formatTime(timeRemaining) : "Time's Up!"}
-      </span>
-    </div>
-  );
-}
-
 interface Question {
   questionNumber: number;
   questionType: "mcq" | "theory";
@@ -558,11 +485,13 @@ export default function AdminExaminationsPage() {
             <CardContent>
               <div className="space-y-3">
                 {exam?.status === "active" && exam?.startedAt && (
-                  <ExamTimer
-                    startedAt={exam?.startedAt}
-                    durationInMinutes={exam?.durationInMinutes}
-                    onTimeUp={() => handleEndExam(exam?._id)}
-                  />
+                  <div className="flex items-center gap-2 text-sm p-3 rounded-lg border-2 border-green-500 bg-green-50">
+                    <Clock className="size-5 text-green-600" />
+                    <span className="text-green-700 font-semibold">
+                      Live — each student gets {exam?.durationInMinutes} minutes
+                      from when they start. End the exam manually when done.
+                    </span>
+                  </div>
                 )}
                 <div className="flex items-center gap-2 text-sm">
                   <Clock className="size-4 text-muted-foreground" />
@@ -983,9 +912,31 @@ export default function AdminExaminationsPage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <CardTitle className="text-lg">
-                              Student: {submission.studentId}
+                              {submission.studentId &&
+                              typeof submission.studentId === "object"
+                                ? `${submission.studentId.firstName} ${submission.studentId.lastName}`
+                                : "Unknown Student"}
                             </CardTitle>
                             <CardDescription>
+                              {submission.studentId &&
+                                typeof submission.studentId === "object" && (
+                                  <>
+                                    {submission.studentId.studentId && (
+                                      <span className="font-medium">
+                                        ID: {submission.studentId.studentId}
+                                      </span>
+                                    )}
+                                    {submission.studentId.email && (
+                                      <span>
+                                        {submission.studentId.studentId
+                                          ? " · "
+                                          : ""}
+                                        {submission.studentId.email}
+                                      </span>
+                                    )}
+                                    <br />
+                                  </>
+                                )}
                               Submitted:{" "}
                               {new Date(
                                 submission.submittedAt,

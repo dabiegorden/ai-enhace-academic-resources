@@ -32,6 +32,7 @@ interface Candidate {
   imageUrl?: string;
   manifestoFileUrl?: string | null;
   votes?: number;
+  noVotes?: number;
 }
 
 interface YesNoTally {
@@ -265,9 +266,23 @@ export default function StudentVotingPage() {
   const handleVote = async () => {
     if (!voteEvent) return;
 
-    if (voteEvent.votingMode === "candidate" && !selectedCandidate) {
-      toast.error("Please select a candidate");
-      return;
+    // A position with exactly one candidate becomes a Yes/No approval ballot.
+    const candidatesForPos = voteEvent.candidates.filter(
+      (c) => c.position === votePosition,
+    );
+    const unopposed =
+      voteEvent.votingMode === "candidate" && candidatesForPos.length === 1;
+
+    if (voteEvent.votingMode === "candidate") {
+      if (unopposed) {
+        if (!selectedYesNo) {
+          toast.error("Please choose Yes or No");
+          return;
+        }
+      } else if (!selectedCandidate) {
+        toast.error("Please select a candidate");
+        return;
+      }
     }
     if (voteEvent.votingMode === "yesno" && !selectedYesNo) {
       toast.error("Please choose Yes or No");
@@ -279,7 +294,9 @@ export default function StudentVotingPage() {
       const body =
         voteEvent.votingMode === "yesno"
           ? { position: votePosition, yesNo: selectedYesNo }
-          : { candidateId: selectedCandidate };
+          : unopposed
+            ? { candidateId: candidatesForPos[0]._id, yesNo: selectedYesNo }
+            : { candidateId: selectedCandidate };
 
       const res = await fetch(`${apiUrl}/voting/${voteEvent._id}/vote`, {
         method: "POST",
@@ -788,27 +805,83 @@ export default function StudentVotingPage() {
 
             <div className="p-6 space-y-4">
               {/* ── CANDIDATE MODE ── */}
-              {voteEvent.votingMode === "candidate" && (
-                <>
-                  {voteEvent.candidates
-                    .filter((c) => c.position === votePosition)
-                    .map((c) => (
-                      <CandidateCard
-                        key={c._id}
-                        candidate={c}
-                        selected={selectedCandidate === c._id}
-                        onClick={() => setSelectedCandidate(c._id)}
-                      />
-                    ))}
-                  {voteEvent.candidates.filter(
+              {voteEvent.votingMode === "candidate" &&
+                (() => {
+                  const candsForPos = voteEvent.candidates.filter(
                     (c) => c.position === votePosition,
-                  ).length === 0 && (
-                    <p className="text-slate-400 text-center py-8">
-                      No candidates for this position.
-                    </p>
-                  )}
-                </>
-              )}
+                  );
+                  if (candsForPos.length === 0) {
+                    return (
+                      <p className="text-slate-400 text-center py-8">
+                        No candidates for this position.
+                      </p>
+                    );
+                  }
+                  // Single (unopposed) candidate → Yes/No approval ballot
+                  if (candsForPos.length === 1) {
+                    const sole = candsForPos[0];
+                    return (
+                      <>
+                        <CandidateCard
+                          candidate={sole}
+                          selected
+                          onClick={() => {}}
+                        />
+                        <p className="text-slate-400 text-sm text-center">
+                          This candidate is unopposed. Vote Yes to approve or No
+                          to reject.
+                        </p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedYesNo("yes")}
+                            className={`flex flex-col items-center gap-3 rounded-2xl border-2 p-8 transition-all duration-200 ${
+                              selectedYesNo === "yes"
+                                ? "border-green-500 bg-green-950/50 shadow-lg shadow-green-900/30"
+                                : "border-slate-700 bg-slate-800/60 hover:border-green-700 hover:bg-slate-800"
+                            }`}
+                          >
+                            <ThumbsUp
+                              className={`w-10 h-10 ${selectedYesNo === "yes" ? "text-green-400" : "text-slate-500"}`}
+                            />
+                            <span
+                              className={`text-xl font-bold ${selectedYesNo === "yes" ? "text-green-300" : "text-slate-400"}`}
+                            >
+                              Yes
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedYesNo("no")}
+                            className={`flex flex-col items-center gap-3 rounded-2xl border-2 p-8 transition-all duration-200 ${
+                              selectedYesNo === "no"
+                                ? "border-red-500 bg-red-950/50 shadow-lg shadow-red-900/30"
+                                : "border-slate-700 bg-slate-800/60 hover:border-red-700 hover:bg-slate-800"
+                            }`}
+                          >
+                            <ThumbsDown
+                              className={`w-10 h-10 ${selectedYesNo === "no" ? "text-red-400" : "text-slate-500"}`}
+                            />
+                            <span
+                              className={`text-xl font-bold ${selectedYesNo === "no" ? "text-red-300" : "text-slate-400"}`}
+                            >
+                              No
+                            </span>
+                          </button>
+                        </div>
+                      </>
+                    );
+                  }
+                  // Normal multi-candidate selection
+                  return candsForPos.map((c) => (
+                    <CandidateCard
+                      key={c._id}
+                      candidate={c}
+                      selected={selectedCandidate === c._id}
+                      onClick={() => setSelectedCandidate(c._id)}
+                    />
+                  ));
+                })()}
 
               {/* ── YES/NO MODE ── */}
               {voteEvent.votingMode === "yesno" && (
@@ -878,7 +951,11 @@ export default function StudentVotingPage() {
                 disabled={
                   submitting ||
                   (voteEvent.votingMode === "candidate" &&
-                    !selectedCandidate) ||
+                    (voteEvent.candidates.filter(
+                      (c) => c.position === votePosition,
+                    ).length === 1
+                      ? !selectedYesNo
+                      : !selectedCandidate)) ||
                   (voteEvent.votingMode === "yesno" && !selectedYesNo)
                 }
                 className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed py-3 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2"

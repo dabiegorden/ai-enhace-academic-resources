@@ -13,10 +13,19 @@ export const createExam = async (req, res) => {
       });
     }
 
+    // Scope the exam to a faculty so other faculties' students can't see it.
+    // Lecturers default to their own faculty; admins may pass one explicitly
+    // (or leave it null to make the exam visible to all faculties).
+    let faculty = req.body.faculty || null;
+    if (req.user.role === "lecturer") {
+      faculty = req.user.faculty || null;
+    }
+
     const exam = await Exam.create({
       title,
       durationInMinutes: Number.parseInt(durationInMinutes),
       createdBy: req.user.id,
+      faculty,
       questions: [],
       status: "draft",
     });
@@ -36,12 +45,36 @@ export const createExam = async (req, res) => {
   }
 };
 
-// Get all exams
+// Get all exams (role-scoped)
+//   • admin    → every exam
+//   • lecturer → only the exams they created (cannot see other lecturers')
+//   • student  → only active/ended exams for their own faculty (or General)
 export const getAllExams = async (req, res) => {
   try {
-    const exams = await Exam.find()
+    const query = {};
+
+    if (req.user.role === "lecturer") {
+      query.createdBy = req.user.id;
+    } else if (req.user.role === "student") {
+      query.status = { $in: ["active", "ended"] };
+      // Faculty-scoped: own faculty OR a school-wide exam (null / "General")
+      query.$or = [
+        { faculty: req.user.faculty },
+        { faculty: null },
+        { faculty: "General" },
+      ];
+    }
+
+    let examsQuery = Exam.find(query)
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: -1 });
+
+    // Never leak correct answers to students
+    if (req.user.role === "student") {
+      examsQuery = examsQuery.select("-questions.correctAnswer");
+    }
+
+    const exams = await examsQuery;
 
     res.status(200).json({
       success: true,
@@ -58,15 +91,30 @@ export const getAllExams = async (req, res) => {
 // Get single exam
 export const getExamById = async (req, res) => {
   try {
-    const exam = await Exam.findById(req.params.id).populate(
-      "createdBy",
-      "firstName lastName email",
-    );
+    const exam = await Exam.findById(req.params.id)
+      .populate("createdBy", "firstName lastName email")
+      // Populate submission authors so the lecturer can identify students by
+      // their name and student ID on the submissions list.
+      .populate(
+        "submissions.studentId",
+        "firstName lastName email studentId faculty program",
+      );
 
     if (!exam) {
       return res.status(404).json({
         success: false,
         message: "Exam not found",
+      });
+    }
+
+    // A lecturer may only view their own exam (admins can view any)
+    if (
+      req.user.role === "lecturer" &&
+      exam.createdBy._id.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view this exam",
       });
     }
 
@@ -207,7 +255,12 @@ export const startExam = async (req, res) => {
 
     exam.status = "active";
     exam.startedAt = new Date();
-    exam.endedAt = new Date(Date.now() + exam.durationInMinutes * 60 * 1000);
+    // NOTE: We intentionally do NOT set a global endedAt here. Each student
+    // gets their own durationInMinutes counted from when they personally open
+    // the exam (see getExamForStudent / studentSessions). The exam stays open
+    // until the lecturer ends it, so students joining later still get the full
+    // allotted time instead of seeing "exam expired".
+    exam.endedAt = undefined;
     await exam.save();
 
     // Notify all students
@@ -292,14 +345,6 @@ export const submitExam = async (req, res) => {
       });
     }
 
-    // Check if time has expired
-    if (new Date() > exam.endedAt) {
-      return res.status(400).json({
-        success: false,
-        message: "Exam time has expired",
-      });
-    }
-
     // Check if student already submitted
     const existingSubmission = exam.submissions.find(
       (sub) => sub.studentId.toString() === req.user.id,
@@ -310,6 +355,22 @@ export const submitExam = async (req, res) => {
         success: false,
         message: "You have already submitted this exam",
       });
+    }
+
+    // Enforce the student's PERSONAL deadline (full duration from when they
+    // opened the exam), not a shared global window. A small grace period is
+    // allowed so an auto-submit fired exactly at zero still goes through.
+    const session = exam.studentSessions.find(
+      (s) => s.studentId.toString() === req.user.id,
+    );
+    if (session) {
+      const graceMs = 10 * 1000;
+      if (Date.now() > new Date(session.deadline).getTime() + graceMs) {
+        return res.status(400).json({
+          success: false,
+          message: "Your exam time has expired",
+        });
+      }
     }
 
     // Auto-grade MCQ questions
@@ -387,6 +448,51 @@ export const getExamForStudent = async (req, res) => {
       });
     }
 
+    // Faculty eligibility — students may only sit exams for their own faculty
+    // (or school-wide exams with no faculty / "General").
+    if (
+      exam.faculty &&
+      exam.faculty !== "General" &&
+      exam.faculty !== req.user.faculty
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This exam is not available for your faculty",
+      });
+    }
+
+    // Block re-taking after a submission
+    const alreadySubmitted = exam.submissions.some(
+      (sub) => sub.studentId.toString() === req.user.id,
+    );
+    if (alreadySubmitted) {
+      return res.status(400).json({
+        success: false,
+        message: "You have already submitted this exam",
+      });
+    }
+
+    // Find or create this student's personal timing session. The deadline is
+    // fixed the first time they open the exam, so refreshing / reopening on
+    // another device does NOT reset or invalidate their remaining time.
+    let session = exam.studentSessions.find(
+      (s) => s.studentId.toString() === req.user.id,
+    );
+    if (!session) {
+      const startedAt = new Date();
+      const deadline = new Date(
+        startedAt.getTime() + exam.durationInMinutes * 60 * 1000,
+      );
+      exam.studentSessions.push({ studentId: req.user.id, startedAt, deadline });
+      await exam.save();
+      session = { startedAt, deadline };
+    } else if (new Date() > new Date(session.deadline)) {
+      return res.status(400).json({
+        success: false,
+        message: "Your exam time has expired",
+      });
+    }
+
     // Remove correct answers from questions
     const sanitizedQuestions = exam.questions.map((q) => {
       const question = q.toObject();
@@ -402,8 +508,10 @@ export const getExamForStudent = async (req, res) => {
         _id: exam._id,
         title: exam.title,
         durationInMinutes: exam.durationInMinutes,
-        startedAt: exam.startedAt,
-        endedAt: exam.endedAt,
+        // Per-student timing: the frontend countdown uses endedAt, so we hand
+        // back THIS student's personal deadline rather than a shared one.
+        startedAt: session.startedAt,
+        endedAt: session.deadline,
         questions: sanitizedQuestions,
         totalPoints: exam.totalPoints,
       },
@@ -416,10 +524,17 @@ export const getExamForStudent = async (req, res) => {
   }
 };
 
-// Get my exams (for students)
+// Get my exams (for students) — faculty-scoped
 export const getMyExams = async (req, res) => {
   try {
-    const exams = await Exam.find({ status: "active" })
+    const exams = await Exam.find({
+      status: "active",
+      $or: [
+        { faculty: req.user.faculty },
+        { faculty: null },
+        { faculty: "General" },
+      ],
+    })
       .select("-questions.correctAnswer")
       .sort({ startedAt: -1 });
 
@@ -492,13 +607,24 @@ export const getExamResults = async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id).populate(
       "submissions.studentId",
-      "firstName lastName email",
+      "firstName lastName email studentId faculty program",
     );
 
     if (!exam) {
       return res.status(404).json({
         success: false,
         message: "Exam not found",
+      });
+    }
+
+    // Lecturers can only see results for their own exams
+    if (
+      req.user.role === "lecturer" &&
+      exam.createdBy.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view these results",
       });
     }
 

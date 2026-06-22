@@ -49,6 +49,7 @@ export const createRating = async (req, res) => {
 
     const ratingData = {
       student: req.user.id,
+      faculty: req.user.faculty,
       type,
       rating,
       comment,
@@ -110,6 +111,18 @@ export const getRatings = async (req, res) => {
     if (academicYear) query.academicYear = academicYear;
     if (semester) query.semester = semester;
 
+    // Visibility scoping:
+    //   • Students only see ratings made within their OWN faculty.
+    //   • Lecturers only see lecturer-ratings that target THEMSELVES — never
+    //     ratings about other lecturers or unrelated course ratings.
+    //   • Admins see everything.
+    if (req.user.role === "student") {
+      query.faculty = req.user.faculty;
+    } else if (req.user.role === "lecturer") {
+      query.type = "lecturer";
+      query.lecturer = req.user.id;
+    }
+
     const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
 
     const ratings = await Rating.find(query)
@@ -156,6 +169,14 @@ export const getAverageRatings = async (req, res) => {
     if (type) query.type = type;
     if (course) query.course = course;
     if (lecturer) query.lecturer = lecturer;
+
+    // Same visibility scoping as getRatings
+    if (req.user.role === "student") {
+      query.faculty = req.user.faculty;
+    } else if (req.user.role === "lecturer") {
+      query.type = "lecturer";
+      query.lecturer = req.user.id;
+    }
 
     const ratings = await Rating.find(query);
 

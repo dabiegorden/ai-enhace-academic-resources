@@ -63,6 +63,16 @@ const Modal: React.FC<ModalProps> = ({
   const overlayRef = useRef<HTMLDivElement>(null);
   const firstFocusableRef = useRef<HTMLElement | null>(null);
 
+  // Keep the latest onClose in a ref so the focus/keydown effect below does NOT
+  // depend on it. Otherwise the parent passes a new onClose arrow on every
+  // render (e.g. on each keystroke while typing in a form field), which would
+  // re-run the effect and re-trigger the auto-focus timer — stealing focus
+  // back to the first field after every character typed.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   // Trap focus inside modal and close on Escape
   useEffect(() => {
     if (!open) return;
@@ -83,7 +93,7 @@ const Modal: React.FC<ModalProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       // Always stop propagation — no keystrokes escape the modal
       e.stopPropagation();
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
       // Tab trap
       if (e.key === "Tab") {
         const modal = overlayRef.current;
@@ -120,7 +130,7 @@ const Modal: React.FC<ModalProps> = ({
       document.removeEventListener("keydown", handleKeyDown, true);
       document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

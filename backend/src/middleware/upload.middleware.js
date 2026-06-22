@@ -83,50 +83,23 @@ const makeDiskStorage = (dest) =>
 // ─── Assignment + Submission Filter ──────────────────────────────────────────
 
 const documentFileFilter = (req, file, cb) => {
+  // Only PDF and images are allowed anywhere in the system. PowerPoint, Word,
+  // and Excel uploads have been removed.
   const allowedMimes = [
     "application/pdf",
-
-    "application/msword",
-
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-
-    "application/vnd.ms-powerpoint",
-
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-
     "image/jpeg",
-
     "image/png",
-
     "image/webp",
-
-    "application/vnd.ms-excel",
-
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "image/gif",
   ];
 
   const allowedExtensions = [
     ".pdf",
-
-    ".doc",
-
-    ".docx",
-
-    ".ppt",
-
-    ".pptx",
-
     ".jpg",
-
     ".jpeg",
-
     ".png",
-
     ".webp",
-
-    ".xls",
-
-    ".xlsx",
+    ".gif",
   ];
 
   const ext = path.extname(file.originalname).toLowerCase();
@@ -135,9 +108,7 @@ const documentFileFilter = (req, file, cb) => {
     cb(null, true);
   } else {
     cb(
-      new Error(
-        "Invalid file type. Allowed: PDF, Word, PowerPoint, Images, Excel",
-      ),
+      new Error("Invalid file type. Allowed: PDF and images only."),
       false,
     );
   }
@@ -199,6 +170,17 @@ export const uploadSubmissions = multer({
 // Lecture notes (AI parser friendly)
 export const uploadLectureNoteFile = multer({
   storage: makeDiskStorage(assignmentsDir),
+
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+  },
+
+  fileFilter: lectureNoteFileFilter,
+});
+
+// Lecture notes — MEMORY storage so the buffer can be streamed to Cloudinary.
+export const uploadLectureNoteMemory = multer({
+  storage: multer.memoryStorage(),
 
   limits: {
     fileSize: 50 * 1024 * 1024,

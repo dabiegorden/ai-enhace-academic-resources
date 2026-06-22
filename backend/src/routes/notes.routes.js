@@ -12,7 +12,9 @@ import {
   getLectureNoteStats,
 } from "../controller/notes.controller.js";
 import { authorize, protect } from "../middleware/auth.middleware.js";
-import { uploadAssignments } from "../middleware/upload.middleware.js";
+// Memory storage (PDF/image filter, 50MB) so the uploaded buffer can be
+// streamed straight to Cloudinary.
+import { uploadLectureNoteMemory } from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
@@ -33,7 +35,7 @@ router.post(
   "/",
   protect,
   authorize("lecturer", "admin"),
-  uploadAssignments.single("file"),
+  uploadLectureNoteMemory.single("file"),
   uploadLectureNote,
 );
 router.put("/:id", protect, authorize("lecturer", "admin"), updateLectureNote);

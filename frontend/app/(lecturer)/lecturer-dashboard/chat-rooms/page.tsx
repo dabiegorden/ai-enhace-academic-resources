@@ -17,7 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Eye, Edit, Trash2, Plus, Users, Sparkles } from "lucide-react";
+import {
+  Eye,
+  Edit,
+  Trash2,
+  Plus,
+  Users,
+  Sparkles,
+  MessageCircle,
+  Send,
+} from "lucide-react";
 import { toast } from "sonner";
 import { FACULTY_NAMES as FACULTIES, FACULTY_PROGRAMS } from "@/constants/faculties";
 import AiChatInsightPanel from "@/components/AiChatInsightPanel";
@@ -34,6 +43,18 @@ interface ChatRoom {
   members: string[];
   lastActivity: string;
   createdAt: string;
+}
+
+interface ChatMessage {
+  _id?: string;
+  message: string;
+  timestamp: string;
+  user: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    profileImage?: string;
+  };
 }
 
 const typeBadge: Record<string, string> = {
@@ -69,8 +90,23 @@ const LecturerChatPage = () => {
   });
   const [actionLoading, setActionLoading] = useState(false);
 
+  // ── Chat state — lets the lecturer actually participate in the room ──
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatSending, setChatSending] = useState(false);
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const tok = () => localStorage.getItem("token") || "";
+  const myId = () => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}")._id || "";
+    } catch {
+      return "";
+    }
+  };
 
   useEffect(() => {
     fetchChatRooms();
@@ -223,6 +259,61 @@ const LecturerChatPage = () => {
     }
   };
 
+  // ── Open the chat for a room: auto-join (idempotent) then load messages ──
+  const openChat = async (room: ChatRoom) => {
+    setChatRoom(room);
+    setChatOpen(true);
+    setChatMessages([]);
+    setChatLoading(true);
+    try {
+      // Ensure the lecturer is a member so they're allowed to post.
+      await fetch(`${apiUrl}/chat/rooms/${room._id}/join`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok()}` },
+      }).catch(() => {});
+
+      const res = await fetch(`${apiUrl}/chat/rooms/${room._id}?limit=100`, {
+        headers: { Authorization: `Bearer ${tok()}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setChatMessages(data.data.messages || []);
+      } else {
+        toast.error(data.message || "Failed to open chat");
+      }
+    } catch {
+      toast.error("Failed to open chat");
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const sendChat = async () => {
+    if (!chatInput.trim() || !chatRoom) return;
+    setChatSending(true);
+    try {
+      const res = await fetch(`${apiUrl}/chat/rooms/${chatRoom._id}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tok()}`,
+        },
+        body: JSON.stringify({ message: chatInput.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setChatMessages((prev) => [...prev, data.data]);
+        setChatInput("");
+      } else {
+        toast.error(data.message || "Failed to send message");
+      }
+    } catch {
+      toast.error("Failed to send message");
+    } finally {
+      setChatSending(false);
+    }
+  };
+
   const reset = () =>
     setFormData({
       name: "",
@@ -341,6 +432,15 @@ const LecturerChatPage = () => {
                     >
                       <Sparkles className="h-3.5 w-3.5" />
                     </button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-gray-400 hover:text-green-400"
+                      title="Open chat"
+                      onClick={() => openChat(room)}
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -602,6 +702,77 @@ const LecturerChatPage = () => {
               {actionLoading ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Chat dialog — lecturer can read & post messages in the room ── */}
+      <Dialog open={chatOpen} onOpenChange={setChatOpen}>
+        <DialogContent className="border-gray-700 bg-gray-900 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-green-400" />
+              {chatRoom?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col h-[60vh]">
+            <div className="flex-1 overflow-y-auto space-y-3 p-1">
+              {chatLoading ? (
+                <p className="py-8 text-center text-sm text-gray-500">
+                  Loading messages…
+                </p>
+              ) : chatMessages.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-500">
+                  No messages yet. Start the conversation!
+                </p>
+              ) : (
+                chatMessages.map((msg, idx) => {
+                  const own = msg.user?._id === myId();
+                  return (
+                    <div
+                      key={`${msg._id ?? "m"}-${idx}`}
+                      className={`flex ${own ? "justify-end" : "justify-start"}`}
+                    >
+                      <div className="max-w-[75%]">
+                        <div
+                          className={`mb-0.5 text-[11px] text-gray-400 ${own ? "text-right" : ""}`}
+                        >
+                          {own
+                            ? "You"
+                            : `${msg.user?.firstName ?? ""} ${msg.user?.lastName ?? ""}`}
+                        </div>
+                        <div
+                          className={`rounded-lg px-3 py-2 text-sm ${own ? "bg-blue-600 text-white" : "bg-gray-800 text-white border border-gray-700"}`}
+                        >
+                          {msg.message}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="flex gap-2 pt-3 border-t border-gray-700">
+              <Input
+                placeholder="Type your message…"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChat();
+                  }
+                }}
+                className="border-gray-700 bg-gray-800"
+              />
+              <Button
+                onClick={sendChat}
+                disabled={!chatInput.trim() || chatSending}
+                className="bg-linear-to-r from-blue-500 to-orange-500 hover:opacity-90"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

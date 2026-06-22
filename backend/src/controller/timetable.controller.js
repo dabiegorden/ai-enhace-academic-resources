@@ -263,6 +263,11 @@ export const getAllTimetables = async (req, res) => {
 
     const query = { isActive: true };
 
+    // Lecturers only see timetables they created (not other lecturers').
+    if (req.user.role === "lecturer") {
+      query.createdBy = req.user.id;
+    }
+
     if (faculty) query.faculty = faculty;
     if (programCode) query.programCode = programCode;
     if (yearOfStudy) query.yearOfStudy = Number(yearOfStudy);
@@ -318,10 +323,21 @@ export const getMyTimetable = async (req, res) => {
     if (semester) query.semester = semester;
     if (academicYear) query.academicYear = academicYear;
 
-    const timetable = await Timetable.findOne(query).populate(
-      "createdBy",
-      "firstName lastName email",
-    );
+    // Prefer the timetable that matches the student's OWN program so they see
+    // their own courses — not another program's timetable that happens to be
+    // in the same faculty and year. Fall back to any faculty/year match only
+    // if no program-specific timetable exists.
+    let timetable = await Timetable.findOne({
+      ...query,
+      programName: req.user.program,
+    }).populate("createdBy", "firstName lastName email");
+
+    if (!timetable) {
+      timetable = await Timetable.findOne(query).populate(
+        "createdBy",
+        "firstName lastName email",
+      );
+    }
 
     if (!timetable) {
       return res.status(404).json({

@@ -11,6 +11,10 @@ const candidateSchema = new mongoose.Schema({
   manifestoFileUrl: { type: String, default: null },
   imageUrl: { type: String },
   votes: { type: Number, default: 0 },
+  // When a candidate runs UNOPPOSED (the only candidate for their position),
+  // the ballot becomes a Yes/No approval vote. "votes" counts Yes approvals
+  // and "noVotes" counts No rejections.
+  noVotes: { type: Number, default: 0 },
 });
 
 // ---------------------------------------------------------------------------

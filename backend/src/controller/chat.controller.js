@@ -1,5 +1,27 @@
 import ChatRoom from "../models/chatroom.model.js";
 
+// ---------------------------------------------------------------------------
+// Helper – can this user access (see / join / chat in) a given room?
+//
+//   • Admins can access everything.
+//   • "general" rooms are open to everyone (school-wide / general courses).
+//   • Faculty / program / course rooms that carry a faculty are restricted to
+//     members of that faculty — students and lecturers from other faculties
+//     cannot join them.
+// ---------------------------------------------------------------------------
+const canAccessRoom = (user, room) => {
+  if (user.role === "admin") return true;
+  if (room.type === "general") return true;
+  if (room.faculty) {
+    return (
+      !!user.faculty &&
+      user.faculty.trim().toLowerCase() === room.faculty.trim().toLowerCase()
+    );
+  }
+  // Course rooms with no faculty attached are treated as open (general course).
+  return true;
+};
+
 // @desc    Create chat room
 // @route   POST /api/chat/rooms
 // @access  Private
@@ -87,10 +109,24 @@ export const getAllChatRooms = async (req, res) => {
       .select("-messages")
       .sort({ lastActivity: -1 });
 
+    // Hide rooms belonging to other faculties (general rooms stay visible).
+    let visibleRooms = chatRooms.filter((room) => canAccessRoom(req.user, room));
+
+    // Lecturers should not see rooms created by other lecturers. They only see
+    // rooms they created, rooms they've joined, and general (school-wide) rooms.
+    if (req.user.role === "lecturer") {
+      visibleRooms = visibleRooms.filter(
+        (room) =>
+          room.type === "general" ||
+          room.createdBy?._id?.toString() === req.user.id ||
+          room.members.some((m) => m.toString() === req.user.id),
+      );
+    }
+
     res.status(200).json({
       success: true,
-      count: chatRooms.length,
-      data: chatRooms,
+      count: visibleRooms.length,
+      data: visibleRooms,
     });
   } catch (error) {
     res.status(400).json({
@@ -138,6 +174,14 @@ export const getChatRoomById = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Chat room not found",
+      });
+    }
+
+    // Block cross-faculty access to room content
+    if (!canAccessRoom(req.user, chatRoom)) {
+      return res.status(403).json({
+        success: false,
+        message: "This room is restricted to its faculty.",
       });
     }
 
@@ -196,6 +240,16 @@ export const joinChatRoom = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Chat room not found",
+      });
+    }
+
+    // Faculty restriction — students/lecturers can't join another faculty's
+    // room (unless it's a general room / general course).
+    if (!canAccessRoom(req.user, chatRoom)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "This room is restricted to its faculty. You cannot join rooms from other faculties.",
       });
     }
 
