@@ -43,17 +43,19 @@ export const getAdminStats = async (_, res) => {
     // Rating and feedback statistics
     const totalRatings = await Rating.countDocuments();
     const avgCourseRating = await Rating.aggregate([
-      { $group: { _id: null, avgRating: { $avg: "$overallRating" } } },
+      { $match: { type: "course" } },
+      { $group: { _id: null, avgRating: { $avg: "$rating" } } },
     ]);
     const avgLecturerRating = await Rating.aggregate([
       { $match: { type: "lecturer" } },
-      { $group: { _id: null, avgRating: { $avg: "$overallRating" } } },
+      { $group: { _id: null, avgRating: { $avg: "$rating" } } },
     ]);
 
-    // Voting statistics
+    // Voting statistics — the Voting model stores the scope in `type`
+    // ("src" | "faculty"), not a `category` field.
     const totalVotes = await Vote.countDocuments();
-    const srcVotes = await Vote.countDocuments({ category: "SRC" });
-    const facultyVotes = await Vote.countDocuments({ category: "faculty" });
+    const srcVotes = await Vote.countDocuments({ type: "src" });
+    const facultyVotes = await Vote.countDocuments({ type: "faculty" });
 
     // Faculty distribution
     const facultyStats = await User.aggregate([
@@ -168,17 +170,21 @@ export const getLecturerStats = async (req, res) => {
       createdBy: userObjectId,
     });
 
-    const avgRating = await Rating.aggregate([
-      { $match: { lecturerId: userObjectId } },
-      { $group: { _id: null, avgRating: { $avg: "$overallRating" } } },
+    // Ratings reference the lecturer via `lecturer` and store the score in
+    // `rating` (not `lecturerId`/`overallRating`).
+    const avgRatingAgg = await Rating.aggregate([
+      { $match: { type: "lecturer", lecturer: userObjectId } },
+      {
+        $group: {
+          _id: null,
+          avgRating: { $avg: "$rating" },
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
-    console.log("[v0] Lecturer stats:", {
-      notesCount,
-      assignmentsCount,
-      examsCount,
-      avgRating: avgRating[0]?.avgRating || 0,
-    });
+    const avgRating = avgRatingAgg[0]?.avgRating || 0;
+    const ratingsCount = avgRatingAgg[0]?.count || 0;
 
     res.json({
       success: true,
@@ -186,7 +192,8 @@ export const getLecturerStats = async (req, res) => {
         notesCount,
         assignmentsCount,
         examsCount,
-        avgRating: avgRating[0]?.avgRating || 0,
+        avgRating,
+        ratingsCount,
       },
     });
   } catch (error) {
@@ -215,8 +222,10 @@ export const getStudentStats = async (req, res) => {
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
+    // Assignment submissions reference the student via `student` (not
+    // `studentId`); exam submissions use `studentId`.
     const submittedAssignments = await Assignment.countDocuments({
-      "submissions.studentId": userObjectId,
+      "submissions.student": userObjectId,
     });
 
     const completedExams = await Exam.countDocuments({
@@ -227,10 +236,27 @@ export const getStudentStats = async (req, res) => {
       members: userObjectId,
     });
 
-    console.log("[v0] Student stats:", {
-      submittedAssignments,
-      completedExams,
-      chatRoomsJoined,
+    // Lecture notes available to this student based on their enrollment —
+    // whole-school ("General" faculty), whole-faculty ("General" program), or
+    // their exact faculty/program/year.
+    let availableNotes = 0;
+    if (req.user?.faculty) {
+      availableNotes = await LectureNote.countDocuments({
+        $or: [
+          { faculty: "General" },
+          { faculty: req.user.faculty, program: "General" },
+          {
+            faculty: req.user.faculty,
+            program: req.user.program,
+            yearOfStudy: req.user.yearOfStudy,
+          },
+        ],
+      });
+    }
+
+    // Ratings this student has submitted.
+    const ratingsSubmitted = await Rating.countDocuments({
+      student: userObjectId,
     });
 
     res.json({
@@ -239,6 +265,8 @@ export const getStudentStats = async (req, res) => {
         submittedAssignments,
         completedExams,
         chatRoomsJoined,
+        availableNotes,
+        ratingsSubmitted,
       },
     });
   } catch (error) {

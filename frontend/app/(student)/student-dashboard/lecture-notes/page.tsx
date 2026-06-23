@@ -82,6 +82,7 @@ interface LectureNote {
   faculty: string;
   program: string;
   yearOfStudy: number;
+  semester?: string;
   filename: string;
   originalName: string;
   fileType: string;
@@ -150,6 +151,10 @@ function StudentsViewLectureNotes() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [courseCodeFilter, setCourseCodeFilter] = useState("");
+  // Semester filter: "all" | "1" | "2" — lets students view a single semester.
+  const [semesterFilter, setSemesterFilter] = useState<"all" | "1" | "2">(
+    "all",
+  );
   const [enrollment, setEnrollment] = useState<EnrollmentInfo | null>(null);
   const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
 
@@ -236,10 +241,15 @@ function StudentsViewLectureNotes() {
         setNotes(data.data || []);
         if (data.enrollment) setEnrollment(data.enrollment);
         if (data.data?.length > 0) {
-          const codes = new Set<string>(
-            data.data.map((n: LectureNote) => n.courseCode),
+          // Expand every course group by default. Keys are scoped per semester
+          // ("Semester 1-CS201") to match the grouped render below.
+          const keys = new Set<string>(
+            data.data.map((n: LectureNote) => {
+              const sem = n.semester ? `Semester ${n.semester}` : "Other";
+              return `${sem}-${n.courseCode}`;
+            }),
           );
-          setExpandedCourses(codes);
+          setExpandedCourses(keys);
         }
       }
     } catch {
@@ -574,17 +584,48 @@ function StudentsViewLectureNotes() {
         .includes(searchQuery.toLowerCase()),
   );
 
-  const notesByCourse = filteredNotes.reduce<Record<string, LectureNote[]>>(
+  // Group notes by semester, then by course code within each semester so the
+  // student sees their material organised semester-by-semester in a grid.
+  const semesterLabel = (note: LectureNote) =>
+    note.semester ? `Semester ${note.semester}` : "Other";
+
+  const notesBySemester = filteredNotes.reduce<
+    Record<string, Record<string, LectureNote[]>>
+  >((acc, note) => {
+    const sem = semesterLabel(note);
+    const code = note.courseCode;
+    if (!acc[sem]) acc[sem] = {};
+    if (!acc[sem][code]) acc[sem][code] = [];
+    acc[sem][code].push(note);
+    return acc;
+  }, {});
+
+  // Sort semesters numerically ("Semester 1", "Semester 2", … then "Other").
+  const allSortedSemesters = Object.keys(notesBySemester).sort((a, b) => {
+    if (a === "Other") return 1;
+    if (b === "Other") return -1;
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
+
+  // Apply the active semester filter ("all" shows every semester).
+  const sortedSemesters =
+    semesterFilter === "all"
+      ? allSortedSemesters
+      : allSortedSemesters.filter((s) => s === `Semester ${semesterFilter}`);
+
+  // Note counts per semester for the filter tabs.
+  const semesterCounts = filteredNotes.reduce<Record<string, number>>(
     (acc, note) => {
-      const key = note.courseCode;
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(note);
+      const key = note.semester || "other";
+      acc[key] = (acc[key] || 0) + 1;
       return acc;
     },
     {},
   );
 
-  const uniqueCourseCodes = Object.keys(notesByCourse).sort();
+  const uniqueCourseCodes = Array.from(
+    new Set(filteredNotes.map((n) => n.courseCode)),
+  );
 
   // ─── Render ───────────────────────────────────────────────────────────────────
 
@@ -687,6 +728,38 @@ function StudentsViewLectureNotes() {
           <Button onClick={fetchNotes}>Search</Button>
         </div>
 
+        {/* Semester filter tabs */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground mr-1">
+            Semester:
+          </span>
+          {([
+            { value: "all", label: "All", count: filteredNotes.length },
+            {
+              value: "1",
+              label: "Semester 1",
+              count: semesterCounts["1"] || 0,
+            },
+            {
+              value: "2",
+              label: "Semester 2",
+              count: semesterCounts["2"] || 0,
+            },
+          ] as const).map((tab) => (
+            <Button
+              key={tab.value}
+              size="sm"
+              variant={semesterFilter === tab.value ? "default" : "outline"}
+              onClick={() => setSemesterFilter(tab.value)}
+            >
+              {tab.label}
+              <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-xs">
+                {tab.count}
+              </Badge>
+            </Button>
+          ))}
+        </div>
+
         {/* AI tools banner */}
         <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
           <CardContent className="pt-4 pb-4">
@@ -737,64 +810,110 @@ function StudentsViewLectureNotes() {
               {filteredNotes.length} note{filteredNotes.length !== 1 ? "s" : ""}{" "}
               across {uniqueCourseCodes.length} course
               {uniqueCourseCodes.length !== 1 ? "s" : ""}
+              {semesterFilter !== "all" && ` · Semester ${semesterFilter}`}
             </p>
-            <div className="space-y-4">
-              {uniqueCourseCodes.map((code) => {
-                const courseNotes = notesByCourse[code];
-                const isExpanded = expandedCourses.has(code);
-                const courseName = courseNotes[0]?.course ?? code;
-                return (
-                  <div
-                    key={code}
-                    className="border rounded-xl overflow-hidden bg-card"
+            {sortedSemesters.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-14">
+                  <FileText className="size-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground text-center font-medium">
+                    No notes for Semester {semesterFilter}.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => setSemesterFilter("all")}
                   >
-                    <button
-                      onClick={() => toggleCourse(code)}
-                      className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/50 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <BookMarked className="size-5 text-primary shrink-0" />
-                        <div>
-                          <p className="font-semibold text-foreground">
-                            {courseName}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {code} &middot; {courseNotes.length} note
-                            {courseNotes.length !== 1 ? "s" : ""}
-                          </p>
-                        </div>
-                      </div>
-                      {isExpanded ? (
-                        <ChevronUp className="size-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="size-4 text-muted-foreground" />
-                      )}
-                    </button>
-                    {isExpanded && (
-                      <div className="p-4 pt-0 grid gap-4 md:grid-cols-2 lg:grid-cols-3 border-t">
-                        {courseNotes.map((note) => (
-                          <NoteCard
-                            key={note._id}
-                            note={note}
-                            onPreview={handlePreview}
-                            onDownload={handleDownload}
-                            onSummarise={handleSummarize}
-                            onView={(n) => {
-                              setSelectedNote(n);
-                              setViewDialogOpen(true);
-                            }}
-                            onQuiz={handleGenerateQuiz}
-                            onRecommendations={handleGetRecommendations}
-                            formatFileSize={formatFileSize}
-                            formatDate={formatDate}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                    Show all semesters
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+            <div className="space-y-8">
+              {sortedSemesters.map((semester) => {
+                const semesterCourses = notesBySemester[semester];
+                const courseCodes = Object.keys(semesterCourses).sort();
+                const semesterNoteCount = courseCodes.reduce(
+                  (sum, code) => sum + semesterCourses[code].length,
+                  0,
+                );
+                return (
+                  <section key={semester} className="space-y-4">
+                    {/* Semester heading */}
+                    <div className="flex items-center gap-3 border-b pb-2">
+                      <GraduationCap className="size-5 text-primary shrink-0" />
+                      <h2 className="text-xl font-bold text-foreground">
+                        {semester}
+                      </h2>
+                      <Badge variant="secondary">
+                        {semesterNoteCount} note
+                        {semesterNoteCount !== 1 ? "s" : ""}
+                      </Badge>
+                    </div>
+
+                    <div className="space-y-4">
+                      {courseCodes.map((code) => {
+                        const courseNotes = semesterCourses[code];
+                        const expandKey = `${semester}-${code}`;
+                        const isExpanded = expandedCourses.has(expandKey);
+                        const courseName = courseNotes[0]?.course ?? code;
+                        return (
+                          <div
+                            key={expandKey}
+                            className="border rounded-xl overflow-hidden bg-card"
+                          >
+                            <button
+                              onClick={() => toggleCourse(expandKey)}
+                              className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/50 transition-colors text-left"
+                            >
+                              <div className="flex items-center gap-3">
+                                <BookMarked className="size-5 text-primary shrink-0" />
+                                <div>
+                                  <p className="font-semibold text-foreground">
+                                    {courseName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {code} &middot; {courseNotes.length} note
+                                    {courseNotes.length !== 1 ? "s" : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              {isExpanded ? (
+                                <ChevronUp className="size-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="size-4 text-muted-foreground" />
+                              )}
+                            </button>
+                            {isExpanded && (
+                              <div className="p-4 pt-0 grid gap-4 md:grid-cols-2 lg:grid-cols-3 border-t">
+                                {courseNotes.map((note) => (
+                                  <NoteCard
+                                    key={note._id}
+                                    note={note}
+                                    onPreview={handlePreview}
+                                    onDownload={handleDownload}
+                                    onSummarise={handleSummarize}
+                                    onView={(n) => {
+                                      setSelectedNote(n);
+                                      setViewDialogOpen(true);
+                                    }}
+                                    onQuiz={handleGenerateQuiz}
+                                    onRecommendations={handleGetRecommendations}
+                                    formatFileSize={formatFileSize}
+                                    formatDate={formatDate}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
                 );
               })}
             </div>
+            )}
           </>
         )}
 

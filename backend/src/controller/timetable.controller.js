@@ -174,6 +174,11 @@ export const createTimetable = async (req, res) => {
       semester,
       academicYear,
       specialization,
+      classDate,
+      startTime,
+      endTime,
+      isActive,
+      isPublished,
     } = req.body;
 
     if (
@@ -229,11 +234,43 @@ export const createTimetable = async (req, res) => {
       semester,
       academicYear,
       specialization,
+      classDate: classDate || undefined,
+      startTime: startTime || undefined,
+      endTime: endTime || undefined,
+      // Honour the publish/active flags supplied at creation time. They were
+      // previously ignored, so a timetable created as "Published" stayed a
+      // draft until a separate update was made.
+      isActive: isActive === undefined ? true : isActive === true || isActive === "true",
+      isPublished: isPublished === true || isPublished === "true",
       timeSlots,
       createdBy: req.user.id,
     });
 
     await timetable.populate("createdBy", "firstName lastName email");
+
+    // If created already published, notify students just like updateTimetable.
+    if (timetable.isPublished) {
+      const io = req.app.get("io");
+      await broadcastToRoles({
+        roles: ["student"],
+        type: "timetable",
+        title: "🗓️ Timetable Published",
+        message:
+          "A new timetable for " +
+          timetable.programName +
+          " Year " +
+          timetable.yearOfStudy +
+          " has been published.",
+        relatedId: timetable._id,
+        relatedModel: "Timetable",
+        metadata: {
+          programCode: timetable.programCode,
+          yearOfStudy: timetable.yearOfStudy,
+          semester: timetable.semester,
+        },
+        io,
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -313,42 +350,53 @@ export const getMyTimetable = async (req, res) => {
 
     const { semester, academicYear } = req.query;
 
+    // Derive the academic level (100/200/300/400) from the student's year of
+    // study so timetables can be matched by level as well as by year.
+    const studentLevel = req.user.yearOfStudy
+      ? String(req.user.yearOfStudy * 100)
+      : undefined;
+
+    // Restrict strictly to the student's OWN faculty, and only show published,
+    // active timetables. A timetable matches the student's level when either
+    // its yearOfStudy equals the student's year OR its level matches the
+    // derived level — this keeps things robust if a lecturer set one but not
+    // the other.
     const query = {
       faculty: req.user.faculty,
-      yearOfStudy: req.user.yearOfStudy,
       isActive: true,
       isPublished: true,
+      $or: [{ yearOfStudy: req.user.yearOfStudy }],
     };
+    if (studentLevel) query.$or.push({ level: studentLevel });
 
     if (semester) query.semester = semester;
     if (academicYear) query.academicYear = academicYear;
 
-    // Prefer the timetable that matches the student's OWN program so they see
-    // their own courses — not another program's timetable that happens to be
-    // in the same faculty and year. Fall back to any faculty/year match only
-    // if no program-specific timetable exists.
-    let timetable = await Timetable.findOne({
-      ...query,
-      programName: req.user.program,
-    }).populate("createdBy", "firstName lastName email");
+    // Fetch every timetable in the student's faculty that matches their
+    // level/year so they can see all relevant schedules.
+    const timetables = await Timetable.find(query)
+      .populate("createdBy", "firstName lastName email")
+      .sort({ updatedAt: -1 });
 
-    if (!timetable) {
-      timetable = await Timetable.findOne(query).populate(
-        "createdBy",
-        "firstName lastName email",
-      );
-    }
-
-    if (!timetable) {
+    if (!timetables || timetables.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "No timetable found for your program and year",
+        message: "No timetable found for your faculty and level",
       });
     }
 
+    // Prefer the timetable that matches the student's OWN program so they see
+    // their own courses by default — not another program's timetable that
+    // happens to be in the same faculty and level.
+    const programMatch = timetables.find(
+      (t) => t.programName === req.user.program,
+    );
+    const primary = programMatch || timetables[0];
+
     res.status(200).json({
       success: true,
-      data: timetable,
+      data: primary,
+      timetables,
     });
   } catch (error) {
     res.status(400).json({
@@ -403,6 +451,9 @@ export const updateTimetable = async (req, res) => {
       specialization,
       timeSlots,
       breakTime,
+      classDate,
+      startTime,
+      endTime,
     } = req.body;
 
     if (programName) timetable.programName = programName;
@@ -437,6 +488,9 @@ export const updateTimetable = async (req, res) => {
       }
     }
     if (specialization) timetable.specialization = specialization;
+    if (classDate !== undefined) timetable.classDate = classDate || undefined;
+    if (startTime !== undefined) timetable.startTime = startTime;
+    if (endTime !== undefined) timetable.endTime = endTime;
     if (timeSlots) timetable.timeSlots = timeSlots;
     if (breakTime) timetable.breakTime = breakTime;
 

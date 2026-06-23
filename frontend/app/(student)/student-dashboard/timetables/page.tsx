@@ -10,15 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Calendar,
-  Clock,
-  Download,
-  FileText,
-  Loader2,
-  MapPin,
-  User,
-} from "lucide-react";
+import { Calendar, Clock, Download, Eye, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface CourseSession {
@@ -59,6 +51,9 @@ interface Timetable {
   faculty: string;
   semester: string;
   academicYear: string;
+  classDate?: string;
+  startTime?: string;
+  endTime?: string;
   specialization?: string;
   timeSlots: TimeSlot[];
   breakTime: {
@@ -73,18 +68,30 @@ interface Timetable {
   updatedAt: string;
 }
 
-const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday"];
-const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-
 const StudentTimetablePage = () => {
   const [timetable, setTimetable] = useState<Timetable | null>(null);
+  const [timetables, setTimetables] = useState<Timetable[]>([]);
+  const [activeSemester, setActiveSemester] = useState<string>("1");
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [docPreviewUrl, setDocPreviewUrl] = useState<string | null>(null);
+  const [docPreviewLoading, setDocPreviewLoading] = useState(false);
+  // Preview is opt-in: the document only loads when the student clicks Preview.
+  const [showPreview, setShowPreview] = useState(false);
 
   const token = localStorage.getItem("token");
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-  // Fetch timetable
+  // Semesters supported by the backend.
+  const SEMESTERS = ["1", "2"];
+
+  // Select a timetable and reset the (opt-in) preview.
+  const selectTimetable = (t: Timetable) => {
+    setTimetable(t);
+    setShowPreview(false);
+  };
+
+  // Fetch timetable(s) for the student's faculty + level
   const fetchTimetable = useCallback(async () => {
     try {
       setLoading(true);
@@ -96,8 +103,13 @@ const StudentTimetablePage = () => {
 
       const data = await response.json();
       if (data.success) {
+        const list: Timetable[] = data.timetables || (data.data ? [data.data] : []);
+        setTimetables(list);
         setTimetable(data.data);
+        if (data.data?.semester) setActiveSemester(data.data.semester);
       } else {
+        setTimetables([]);
+        setTimetable(null);
         toast.error(data.message || "Failed to fetch timetable");
       }
     } catch (error) {
@@ -152,14 +164,45 @@ const StudentTimetablePage = () => {
     fetchTimetable();
   }, [fetchTimetable]);
 
-  // Check if a time slot falls within break time
-  const isBreakTime = (slot: TimeSlot): boolean => {
-    if (!timetable?.breakTime) return false;
-    return (
-      slot.startTime === timetable.breakTime.startTime &&
-      slot.endTime === timetable.breakTime.endTime
-    );
-  };
+  // Load the actual document uploaded by the lecturer so it can be embedded
+  // inline — but ONLY after the student clicks Preview (no auto-preview). The
+  // download endpoint is auth-protected, so we fetch it as a blob and create
+  // an object URL for the <iframe>.
+  useEffect(() => {
+    let revoked: string | null = null;
+
+    const loadDocument = async () => {
+      if (!showPreview || !timetable?._id || !timetable.timetableDocument) {
+        setDocPreviewUrl(null);
+        return;
+      }
+
+      try {
+        setDocPreviewLoading(true);
+        setDocPreviewUrl(null);
+        const response = await fetch(
+          `${apiUrl}/timetables/${timetable._id}/download-document`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!response.ok) throw new Error("Failed to load document");
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        revoked = url;
+        setDocPreviewUrl(url);
+      } catch (error) {
+        console.error("Document preview error:", error);
+        setDocPreviewUrl(null);
+      } finally {
+        setDocPreviewLoading(false);
+      }
+    };
+
+    loadDocument();
+
+    return () => {
+      if (revoked) window.URL.revokeObjectURL(revoked);
+    };
+  }, [showPreview, timetable?._id, apiUrl, token]);
 
   // Format file size
   const formatFileSize = (bytes: number): string => {
@@ -210,8 +253,85 @@ const StudentTimetablePage = () => {
           <Badge variant="secondary" className="text-base px-4 py-2">
             {timetable.academicYear}
           </Badge>
+          <Badge variant="outline" className="text-base px-4 py-2">
+            Level {timetable.level}
+          </Badge>
         </div>
       </div>
+
+      {/* Semester tabs + program selector. The backend returns every published
+          timetable for the student's faculty and level, so a CEMS student can
+          see both Computer Science and Information Technology schedules, split
+          by Semester 1 / Semester 2. */}
+      <Card>
+        <CardContent className="py-4 space-y-4">
+          {/* Semester tabs */}
+          <div className="flex flex-wrap gap-2">
+            {SEMESTERS.map((sem) => {
+              const count = timetables.filter(
+                (t) => t.semester === sem,
+              ).length;
+              const isActive = activeSemester === sem;
+              return (
+                <Button
+                  key={sem}
+                  size="sm"
+                  variant={isActive ? "default" : "outline"}
+                  onClick={() => {
+                    setActiveSemester(sem);
+                    const inSem = timetables.filter((t) => t.semester === sem);
+                    if (inSem.length > 0) selectTimetable(inSem[0]);
+                  }}
+                >
+                  Semester {sem}
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 px-1.5 py-0 text-xs"
+                  >
+                    {count}
+                  </Badge>
+                </Button>
+              );
+            })}
+          </div>
+
+          {/* Program selector within the active semester */}
+          {(() => {
+            const inSem = timetables.filter(
+              (t) => t.semester === activeSemester,
+            );
+            if (inSem.length === 0) {
+              return (
+                <p className="text-sm text-muted-foreground">
+                  No timetable published for Semester {activeSemester} yet.
+                </p>
+              );
+            }
+            return (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <p className="text-sm font-medium text-muted-foreground shrink-0">
+                  {timetable.faculty} — Level {timetable.level}. Select program:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {inSem.map((t) => {
+                    const isSelected = t._id === timetable._id;
+                    return (
+                      <Button
+                        key={t._id}
+                        size="sm"
+                        variant={isSelected ? "default" : "outline"}
+                        onClick={() => selectTimetable(t)}
+                      >
+                        {t.programName} ({t.programCode})
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
 
       {/* Timetable Info Card */}
       <Card>
@@ -254,6 +374,29 @@ const StudentTimetablePage = () => {
               <p className="font-semibold">{timetable.specialization}</p>
             </div>
           )}
+          {timetable.classDate && (
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Date</p>
+              <p className="font-semibold flex items-center gap-1">
+                <Calendar className="size-4" />
+                {new Date(timetable.classDate).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </p>
+            </div>
+          )}
+          {(timetable.startTime || timetable.endTime) && (
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Time</p>
+              <p className="font-semibold flex items-center gap-1">
+                <Clock className="size-4" />
+                {timetable.startTime || ""}
+                {timetable.endTime ? ` - ${timetable.endTime}` : ""}
+              </p>
+            </div>
+          )}
           {timetable.timetableDocument && (
             <>
               <div className="space-y-1">
@@ -274,139 +417,109 @@ const StudentTimetablePage = () => {
         </CardContent>
       </Card>
 
-      {/* Timetable Grid */}
+      {/* Uploaded Timetable Document */}
       <Card>
         <CardHeader>
-          <CardTitle>Weekly Schedule</CardTitle>
-          <CardDescription>
-            Your class timetable for {timetable.academicYear} - Semester{" "}
-            {timetable.semester}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <div className="min-w-200">
-            {/* Table Header */}
-            <div className="grid grid-cols-6 gap-2 mb-4">
-              <div className="font-semibold text-sm text-muted-foreground flex items-center">
-                <Clock className="mr-2 size-4" />
-                Time
-              </div>
-              {DAY_LABELS.map((day) => (
-                <div key={day} className="font-semibold text-sm text-center">
-                  {day}
-                </div>
-              ))}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Timetable</CardTitle>
+              <CardDescription>
+                Official timetable uploaded by your lecturer for{" "}
+                {timetable.programName} — {timetable.academicYear} - Semester{" "}
+                {timetable.semester}
+              </CardDescription>
             </div>
-
-            {/* Table Rows */}
-            <div className="space-y-2">
-              {timetable.timeSlots.map((slot) => {
-                const isBreak = isBreakTime(slot);
-
-                if (isBreak) {
-                  return (
-                    <div
-                      key={slot._id}
-                      className="grid grid-cols-6 gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-lg"
-                    >
-                      <div className="flex flex-col justify-center">
-                        <p className="text-sm font-semibold">
-                          {slot.startTime} - {slot.endTime}
-                        </p>
-                      </div>
-                      <div className="col-span-5 flex items-center justify-center">
-                        <Badge className="bg-yellow-500 text-white px-4 py-2 text-base">
-                          {timetable.breakTime.name}
-                        </Badge>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={slot._id}
-                    className="grid grid-cols-6 gap-2 p-2 border rounded-lg hover:shadow-md transition-shadow"
+            {timetable.timetableDocument && (
+              <div className="flex gap-2">
+                {timetable.timetableDocument.fileType === "pdf" && (
+                  <Button
+                    variant={showPreview ? "secondary" : "default"}
+                    onClick={() => setShowPreview((v) => !v)}
                   >
-                    {/* Time Column */}
-                    <div className="flex flex-col justify-center px-2">
-                      <p className="text-sm font-semibold">{slot.startTime}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {slot.endTime}
-                      </p>
-                    </div>
-
-                    {/* Day Columns */}
-                    {DAYS.map((day) => {
-                      const session = slot[day as keyof TimeSlot] as
-                        | CourseSession
-                        | undefined;
-
-                      if (!session || !session.courseCode) {
-                        return (
-                          <div
-                            key={day}
-                            className="flex items-center justify-center p-2 bg-gray-50 rounded text-xs text-muted-foreground"
-                          >
-                            -
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div
-                          key={day}
-                          className="p-3 bg-blue-50 border border-blue-200 rounded space-y-1"
-                        >
-                          <p className="font-bold text-sm text-blue-900">
-                            {session.courseCode}
-                          </p>
-                          {session.courseName && (
-                            <p className="text-xs text-blue-800 line-clamp-1">
-                              {session.courseName}
-                            </p>
-                          )}
-                          {session.lecturer_initials && (
-                            <div className="flex items-center gap-1 text-xs text-blue-700">
-                              <User className="size-3" />
-                              {session.lecturer_initials}
-                            </div>
-                          )}
-                          {session.location && (
-                            <div className="flex items-center gap-1 text-xs text-blue-700">
-                              <MapPin className="size-3" />
-                              {session.location}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
+                    <Eye className="mr-2 size-4" />
+                    {showPreview ? "Hide Preview" : "Preview"}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                >
+                  {downloading ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 size-4" />
+                  )}
+                  Download
+                </Button>
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Legend */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Legend</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-2">
-            <div className="size-4 bg-blue-50 border border-blue-200 rounded" />
-            <span className="text-sm">Class Session</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="size-4 bg-yellow-50 border border-yellow-200 rounded" />
-            <span className="text-sm">Break Time</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="size-4 bg-gray-50 rounded" />
-            <span className="text-sm">No Class</span>
-          </div>
+        <CardContent>
+          {!timetable.timetableDocument ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <FileText className="size-14 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground max-w-md">
+                Your lecturer has not uploaded a timetable document yet. Please
+                check back later.
+              </p>
+            </div>
+          ) : !showPreview ? (
+            /* No auto-preview — show a prompt with Preview / Download actions. */
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <FileText className="size-14 text-muted-foreground mb-4" />
+              <p className="font-medium mb-1">
+                {timetable.timetableDocument.originalName}
+              </p>
+              <p className="text-muted-foreground mb-4 max-w-md">
+                {timetable.timetableDocument.fileType === "pdf"
+                  ? "Click Preview to view the timetable here, or download it."
+                  : "This document can't be previewed inline. Download it to view your timetable."}
+              </p>
+              <div className="flex gap-2">
+                {timetable.timetableDocument.fileType === "pdf" && (
+                  <Button onClick={() => setShowPreview(true)}>
+                    <Eye className="mr-2 size-4" />
+                    Preview
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                >
+                  {downloading ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 size-4" />
+                  )}
+                  Download
+                </Button>
+              </div>
+            </div>
+          ) : docPreviewLoading ? (
+            <div className="flex items-center justify-center py-24">
+              <Loader2 className="size-8 animate-spin text-primary" />
+            </div>
+          ) : docPreviewUrl ? (
+            <iframe
+              src={docPreviewUrl}
+              title={timetable.timetableDocument.originalName}
+              className="w-full h-[80vh] rounded-lg border"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <FileText className="size-14 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground mb-4">
+                Failed to load preview. Please download the document instead.
+              </p>
+              <Button onClick={handleDownload} disabled={downloading}>
+                <Download className="mr-2 size-4" />
+                Download
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

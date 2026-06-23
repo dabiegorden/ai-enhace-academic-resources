@@ -660,6 +660,13 @@ const LecturerNotesPage = () => {
                     <SelectValue placeholder="Select program" />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* When faculty is General (Whole School) the note targets
+                        every program across all faculties. */}
+                    {formData.faculty === "General" && (
+                      <SelectItem value="General">
+                        General (All Programs)
+                      </SelectItem>
+                    )}
                     {/* General = course offered to the WHOLE FACULTY */}
                     {formData.faculty && formData.faculty !== "General" && (
                       <SelectItem value="General">
@@ -866,6 +873,10 @@ const LecturerNotesPage = () => {
                     <SelectValue placeholder="Select faculty" />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* General = course offered to the WHOLE SCHOOL */}
+                    <SelectItem value="General">
+                      General (Whole School)
+                    </SelectItem>
                     {faculties.map((faculty) => (
                       <SelectItem key={faculty} value={faculty}>
                         {faculty}
@@ -890,6 +901,16 @@ const LecturerNotesPage = () => {
                     <SelectValue placeholder="Select program" />
                   </SelectTrigger>
                   <SelectContent>
+                    {formData.faculty === "General" && (
+                      <SelectItem value="General">
+                        General (All Programs)
+                      </SelectItem>
+                    )}
+                    {formData.faculty && formData.faculty !== "General" && (
+                      <SelectItem value="General">
+                        General (Whole Faculty)
+                      </SelectItem>
+                    )}
                     {formData.faculty &&
                       programs[formData.faculty as keyof typeof programs]?.map(
                         (program) => (

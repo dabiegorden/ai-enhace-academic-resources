@@ -30,6 +30,7 @@ import {
   FileText,
   CheckCircle2,
   Eye,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -78,6 +79,7 @@ export default function LecturerExaminationsPage() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
   const [viewQuestionsDialogOpen, setViewQuestionsDialogOpen] = useState(false);
   const [viewSubmissionsDialogOpen, setViewSubmissionsDialogOpen] =
@@ -165,6 +167,58 @@ export default function LecturerExaminationsPage() {
       console.error("Error creating exam:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to create exam",
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openEditDialog = (exam: Exam) => {
+    setSelectedExam(exam);
+    setExamTitle(exam.title);
+    setDurationInMinutes(exam.durationInMinutes.toString());
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateExam = async () => {
+    if (!selectedExam) return;
+
+    if (!examTitle || !durationInMinutes) {
+      toast.error("Please fill all fields");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+
+      const response = await fetch(`${apiUrl}/exams/${selectedExam._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: examTitle,
+          durationInMinutes: Number.parseInt(durationInMinutes),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to update exam");
+      }
+
+      toast.success("Exam updated successfully");
+      setEditDialogOpen(false);
+      setSelectedExam(null);
+      setExamTitle("");
+      setDurationInMinutes("");
+      fetchExams();
+    } catch (error) {
+      console.error("Error updating exam:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update exam",
       );
     } finally {
       setActionLoading(false);
@@ -462,7 +516,13 @@ export default function LecturerExaminationsPage() {
             Create and manage your examinations
           </p>
         </div>
-        <Button onClick={() => setAddDialogOpen(true)}>
+        <Button
+          onClick={() => {
+            setExamTitle("");
+            setDurationInMinutes("");
+            setAddDialogOpen(true);
+          }}
+        >
           <Plus className="mr-2 size-4" />
           Create Exam
         </Button>
@@ -515,6 +575,15 @@ export default function LecturerExaminationsPage() {
                 <div className="pt-3 space-y-2">
                   {exam?.status === "draft" && (
                     <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full bg-transparent"
+                        onClick={() => openEditDialog(exam)}
+                      >
+                        <Pencil className="mr-2 size-4" />
+                        Edit Exam
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -652,6 +721,56 @@ export default function LecturerExaminationsPage() {
             </Button>
             <Button onClick={handleCreateExam} disabled={actionLoading}>
               {actionLoading ? "Creating..." : "Create Exam"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Exam Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Exam</DialogTitle>
+            <DialogDescription>
+              Update the exam title and duration. Only draft exams can be
+              edited.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-title">Exam Title</Label>
+              <Input
+                id="edit-title"
+                placeholder="e.g., Midterm Examination"
+                value={examTitle}
+                onChange={(e) => setExamTitle(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-duration">Duration (in minutes)</Label>
+              <Input
+                id="edit-duration"
+                type="number"
+                placeholder="e.g., 60"
+                value={durationInMinutes}
+                onChange={(e) => setDurationInMinutes(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditDialogOpen(false);
+                setExamTitle("");
+                setDurationInMinutes("");
+              }}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateExam} disabled={actionLoading}>
+              {actionLoading ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>

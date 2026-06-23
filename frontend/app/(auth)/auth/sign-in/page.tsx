@@ -138,7 +138,7 @@ export default function LoginForm() {
               height={100}
             />
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Welcome Back
+              Sign In Page
             </h1>
             <p className="text-gray-600 text-lg">
               Sign in to continue your learning journey

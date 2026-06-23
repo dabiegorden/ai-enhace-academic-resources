@@ -50,6 +50,9 @@ interface Timetable {
   faculty: string;
   semester: string;
   academicYear: string;
+  classDate?: string;
+  startTime?: string;
+  endTime?: string;
   isActive: boolean;
   isPublished: boolean;
   timeSlots?: any[];
@@ -89,6 +92,9 @@ const LecturerTimeTable = () => {
     faculty: "",
     semester: "",
     academicYear: "",
+    classDate: "",
+    startTime: "",
+    endTime: "",
     isActive: true,
     isPublished: false,
   });
@@ -252,6 +258,9 @@ const LecturerTimeTable = () => {
         faculty: "",
         semester: "",
         academicYear: "",
+        classDate: "",
+        startTime: "",
+        endTime: "",
         isActive: true,
         isPublished: false,
       });
@@ -283,6 +292,9 @@ const LecturerTimeTable = () => {
             programName: formData.programName,
             semester: formData.semester,
             academicYear: formData.academicYear,
+            classDate: formData.classDate,
+            startTime: formData.startTime,
+            endTime: formData.endTime,
             isActive: formData.isActive,
             isPublished: formData.isPublished,
           }),
@@ -501,6 +513,9 @@ const LecturerTimeTable = () => {
               faculty: "",
               semester: "",
               academicYear: "",
+              classDate: "",
+              startTime: "",
+              endTime: "",
               isActive: true,
               isPublished: false,
             });
@@ -577,6 +592,21 @@ const LecturerTimeTable = () => {
                       {timetable.faculty} • Level {timetable.level} • Year{" "}
                       {timetable.yearOfStudy} • Semester {timetable.semester}
                     </p>
+                    {(timetable.classDate ||
+                      timetable.startTime ||
+                      timetable.endTime) && (
+                      <p className="mt-1 text-sm text-gray-400">
+                        {timetable.classDate &&
+                          new Date(timetable.classDate).toLocaleDateString(
+                            "en-US",
+                            { year: "numeric", month: "short", day: "numeric" },
+                          )}
+                        {(timetable.startTime || timetable.endTime) &&
+                          ` • ${timetable.startTime || ""}${
+                            timetable.endTime ? ` - ${timetable.endTime}` : ""
+                          }`}
+                      </p>
+                    )}
                     {timetable.timetableDocument && (
                       <div className="mt-3 flex items-center gap-3 rounded bg-gray-700/50 p-2">
                         <FileText className="h-4 w-4 text-blue-400" />
@@ -620,6 +650,11 @@ const LecturerTimeTable = () => {
                           faculty: timetable.faculty,
                           semester: timetable.semester,
                           academicYear: timetable.academicYear,
+                          classDate: timetable.classDate
+                            ? timetable.classDate.slice(0, 10)
+                            : "",
+                          startTime: timetable.startTime || "",
+                          endTime: timetable.endTime || "",
                           isActive: timetable.isActive,
                           isPublished: timetable.isPublished,
                         });
@@ -833,6 +868,41 @@ const LecturerTimeTable = () => {
               />
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="classDate">Date</Label>
+              <Input
+                id="classDate"
+                type="date"
+                value={formData.classDate}
+                onChange={(e) =>
+                  setFormData({ ...formData, classDate: e.target.value })
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="startTime">Start Time</Label>
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={formData.startTime}
+                  onChange={(e) =>
+                    setFormData({ ...formData, startTime: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="endTime">End Time</Label>
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(e) =>
+                    setFormData({ ...formData, endTime: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -945,6 +1015,41 @@ const LecturerTimeTable = () => {
                   setFormData({ ...formData, academicYear: e.target.value })
                 }
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-classDate">Date</Label>
+              <Input
+                id="edit-classDate"
+                type="date"
+                value={formData.classDate}
+                onChange={(e) =>
+                  setFormData({ ...formData, classDate: e.target.value })
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-startTime">Start Time</Label>
+                <Input
+                  id="edit-startTime"
+                  type="time"
+                  value={formData.startTime}
+                  onChange={(e) =>
+                    setFormData({ ...formData, startTime: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-endTime">End Time</Label>
+                <Input
+                  id="edit-endTime"
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(e) =>
+                    setFormData({ ...formData, endTime: e.target.value })
+                  }
+                />
+              </div>
             </div>
             <div className="grid gap-2">
               <label className="flex items-center gap-2">
@@ -1095,6 +1200,36 @@ const LecturerTimeTable = () => {
                     {selectedTimetable.isPublished ? "Published" : "Draft"}
                   </p>
                 </div>
+                {selectedTimetable.classDate && (
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Date
+                    </p>
+                    <p className="font-semibold">
+                      {new Date(
+                        selectedTimetable.classDate,
+                      ).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </div>
+                )}
+                {(selectedTimetable.startTime ||
+                  selectedTimetable.endTime) && (
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Time
+                    </p>
+                    <p className="font-semibold">
+                      {selectedTimetable.startTime || ""}
+                      {selectedTimetable.endTime
+                        ? ` - ${selectedTimetable.endTime}`
+                        : ""}
+                    </p>
+                  </div>
+                )}
               </div>
               {selectedTimetable.timetableDocument && (
                 <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">

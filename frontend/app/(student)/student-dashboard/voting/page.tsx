@@ -707,11 +707,70 @@ export default function StudentVotingPage() {
               {/* Candidate results */}
               {detailEvent.votingMode === "candidate" &&
                 Object.entries(groupByPosition(detailEvent.candidates)).map(
-                  ([pos, cands]) => (
+                  ([pos, cands]) => {
+                    // A position with a single candidate is decided by a Yes/No
+                    // approval ballot, so surface the approve/reject outcome.
+                    const isUnopposed = cands.length === 1;
+                    return (
                     <div key={pos} className="space-y-3">
                       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-400 uppercase tracking-wider">
                         <Award className="w-4 h-4 text-purple-400" /> {pos}
+                        {isUnopposed && (
+                          <span className="ml-1 normal-case text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
+                            Unopposed · Yes/No
+                          </span>
+                        )}
                       </h3>
+                      {isUnopposed && detailEvent.resultsPublished && (
+                        <div className="rounded-xl bg-slate-800/60 border border-slate-700 p-4 space-y-2">
+                          {(() => {
+                            const yes = cands[0].votes ?? 0;
+                            const no = cands[0].noVotes ?? 0;
+                            const total = yes + no || 1;
+                            const yesPct = Math.round((yes / total) * 100);
+                            const outcome =
+                              yes > no
+                                ? "APPROVED"
+                                : yes < no
+                                  ? "REJECTED"
+                                  : "TIE";
+                            return (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex gap-4 text-sm">
+                                    <span className="text-green-400 font-medium">
+                                      Yes: {yes}
+                                    </span>
+                                    <span className="text-red-400 font-medium">
+                                      No: {no}
+                                    </span>
+                                  </div>
+                                  <span
+                                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                      outcome === "APPROVED"
+                                        ? "bg-green-500/20 text-green-400"
+                                        : outcome === "REJECTED"
+                                          ? "bg-red-500/20 text-red-400"
+                                          : "bg-slate-600 text-slate-400"
+                                    }`}
+                                  >
+                                    {outcome}
+                                  </span>
+                                </div>
+                                <div className="h-2 w-full rounded-full bg-slate-700 overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-green-500 transition-all"
+                                    style={{ width: `${yesPct}%` }}
+                                  />
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                  {yesPct}% Yes
+                                </p>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
                       <div className="grid gap-3 sm:grid-cols-2">
                         {cands.map((c) => (
                           <div
@@ -754,7 +813,8 @@ export default function StudentVotingPage() {
                                     <FileText className="w-3 h-3" /> Manifesto
                                   </a>
                                 )}
-                                {detailEvent.resultsPublished &&
+                                {!isUnopposed &&
+                                  detailEvent.resultsPublished &&
                                   c.votes !== undefined && (
                                     <p className="mt-2 text-yellow-400 font-bold text-sm flex items-center gap-1">
                                       <Trophy className="w-3.5 h-3.5" />{" "}
@@ -767,7 +827,8 @@ export default function StudentVotingPage() {
                         ))}
                       </div>
                     </div>
-                  ),
+                  );
+                  },
                 )}
             </div>
           </div>

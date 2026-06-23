@@ -95,6 +95,17 @@ const timetableSchema = new mongoose.Schema(
       type: String,
       required: [true, "Academic year is required"],
     },
+    // Optional schedule date/time for the timetable (e.g. the date the
+    // schedule takes effect and the daily start/end times of classes).
+    classDate: {
+      type: Date,
+    },
+    startTime: {
+      type: String,
+    },
+    endTime: {
+      type: String,
+    },
     specialization: String,
     timeSlots: [timeSlotSchema],
     breakTime: {

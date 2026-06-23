@@ -416,7 +416,22 @@ const StudentsRatingsPage = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data.success && data.data) setLecturers(data.data);
+      if (data.success && data.data) {
+        // Only show lecturers from the same faculty as the logged-in student.
+        let studentFaculty = "";
+        try {
+          const userStr = localStorage.getItem("user");
+          if (userStr) studentFaculty = JSON.parse(userStr).faculty || "";
+        } catch {
+          studentFaculty = "";
+        }
+
+        const list: LecturerData[] = data.data;
+        const sameFaculty = studentFaculty
+          ? list.filter((lec) => lec.faculty === studentFaculty)
+          : list;
+        setLecturers(sameFaculty);
+      }
     } catch {
       // silently fail
     } finally {

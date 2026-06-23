@@ -9,7 +9,7 @@ import {
   TrendingUp,
   Award,
   Target,
-  Activity,
+  BookOpen,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatsCard } from "@/constants";
@@ -18,6 +18,8 @@ interface StudentStats {
   submittedAssignments: number;
   completedExams: number;
   chatRoomsJoined: number;
+  availableNotes: number;
+  ratingsSubmitted: number;
 }
 
 export default function StudentsDashboardPage() {
@@ -102,14 +104,6 @@ export default function StudentsDashboardPage() {
   }
 
   const totalActivities = stats.submittedAssignments + stats.completedExams;
-  const completionRate =
-    totalActivities > 0
-      ? (
-          ((stats.submittedAssignments + stats.completedExams) /
-            totalActivities) *
-          100
-        ).toFixed(0)
-      : 0;
 
   return (
     <div className="space-y-8">
@@ -140,9 +134,9 @@ export default function StudentsDashboardPage() {
             bgColor="from-green-500 to-emerald-500"
           />
           <StatsCard
-            title="Chat Rooms Joined"
-            value={stats.chatRoomsJoined}
-            icon={<MessageSquare className="w-5 h-5" />}
+            title="Lecture Notes Available"
+            value={stats.availableNotes}
+            icon={<BookOpen className="w-5 h-5" />}
             bgColor="from-purple-500 to-pink-500"
           />
         </div>
@@ -161,14 +155,14 @@ export default function StudentsDashboardPage() {
             bgColor="from-indigo-500 to-blue-500"
           />
           <StatsCard
-            title="Community Engagement"
+            title="Chat Rooms Joined"
             value={stats.chatRoomsJoined}
-            icon={<Activity className="w-5 h-5" />}
+            icon={<MessageSquare className="w-5 h-5" />}
             bgColor="from-cyan-500 to-teal-500"
           />
           <StatsCard
-            title="Completion Rate"
-            value={`${completionRate}%`}
+            title="Ratings Submitted"
+            value={stats.ratingsSubmitted}
             icon={<Award className="w-5 h-5" />}
             bgColor="from-orange-500 to-red-500"
           />
