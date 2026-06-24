@@ -206,7 +206,7 @@ export default function LecturerDashboard() {
         <h2 className="text-xl font-semibold text-white mb-4">
           Performance Overview
         </h2>
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
           <StatsCard
             title="Total Content"
             value={stats.notesCount + stats.assignmentsCount + stats.examsCount}
@@ -219,12 +219,13 @@ export default function LecturerDashboard() {
             icon={<Clock className="w-5 h-5" />}
             bgColor="from-cyan-500 to-teal-500"
           />
-          <StatsCard
+
+          {/* <StatsCard
             title="Rating Score"
             value={`${((stats.avgRating / 5) * 100).toFixed(0)}%`}
             icon={<Award className="w-5 h-5" />}
             bgColor="from-orange-500 to-red-500"
-          />
+          /> */}
         </div>
       </div>
 

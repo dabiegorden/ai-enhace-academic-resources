@@ -19,6 +19,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
   Plus,
   Edit2,
   Trash2,
@@ -130,6 +136,14 @@ export default function VotingAdmin() {
   });
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  // Ballot style chosen via tabs:
+  //   "single"   → exactly one candidate per position → Yes/No approval ballot
+  //   "multiple" → several candidates per position → voters pick one
+  // Both map to votingMode "candidate"; the student side automatically renders
+  // a Yes/No ballot for any position that has a single (unopposed) candidate.
+  const [ballotType, setBallotType] = useState<"single" | "multiple">(
+    "single",
+  );
   const [currentCandidate, setCurrentCandidate] = useState<Candidate>({
     name: "",
     studentId: "",
@@ -216,6 +230,21 @@ export default function VotingAdmin() {
     if (exists && !currentCandidate._id) {
       toast.error("Candidate with this student ID already added");
       return;
+    }
+    // In single-candidate (Yes/No) mode each position may have only ONE
+    // candidate — students then approve or reject that candidate.
+    if (ballotType === "single") {
+      const positionTaken = candidates.some(
+        (c) =>
+          c.position === currentCandidate.position &&
+          c.studentId !== currentCandidate.studentId,
+      );
+      if (positionTaken) {
+        toast.error(
+          `"${currentCandidate.position}" already has a candidate. Single-candidate (Yes/No) mode allows only one candidate per position.`,
+        );
+        return;
+      }
     }
     if (currentCandidate._id) {
       setCandidates(
@@ -517,6 +546,7 @@ export default function VotingAdmin() {
       startTime: "09:00",
       endTime: "17:00",
     });
+    setBallotType("single");
     setCandidates([]);
     resetCandidate();
   };
@@ -720,7 +750,9 @@ export default function VotingAdmin() {
                           description: voting.description,
                           type: voting.type,
                           faculty: voting.faculty || "",
-                          votingMode: voting.votingMode || "candidate",
+                          // New events are always candidate-based; "single" vs
+                          // "multiple" is decided by the ballot-type tab.
+                          votingMode: "candidate",
                           positions: voting.positions.join(", "),
                           startDate: voting.startDate.split("T")[0],
                           endDate: voting.endDate.split("T")[0],
@@ -728,6 +760,16 @@ export default function VotingAdmin() {
                           endTime: extractTime(voting.endDate),
                         });
                         setCandidates(voting.candidates);
+                        // Derive the tab: if any position has more than one
+                        // candidate it's a multiple-candidate ballot.
+                        const counts: Record<string, number> = {};
+                        (voting.candidates || []).forEach((c) => {
+                          counts[c.position] = (counts[c.position] || 0) + 1;
+                        });
+                        const hasMultiple = Object.values(counts).some(
+                          (n) => n > 1,
+                        );
+                        setBallotType(hasMultiple ? "multiple" : "single");
                         setEditDialogOpen(true);
                       }}
                       className="text-gray-300 hover:bg-gray-600"
@@ -859,67 +901,54 @@ export default function VotingAdmin() {
               </div>
             )}
 
-            {/* ── Ballot Mode ── */}
+            {/* ── Ballot Type (tabs) ── */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Ballot Mode
+                Ballot Type
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData({ ...formData, votingMode: "candidate" })
-                  }
-                  className={`flex items-center gap-2 rounded-lg border p-3 text-left transition-colors ${
-                    formData.votingMode === "candidate"
-                      ? "border-blue-500 bg-blue-900/30 text-blue-300"
-                      : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-500"
-                  }`}
-                >
-                  <Users className="h-5 w-5 shrink-0" />
-                  <div>
-                    <p className="font-medium text-sm">Candidate Vote</p>
-                    <p className="text-xs opacity-70">
-                      Select one candidate per position
-                    </p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData({ ...formData, votingMode: "yesno" })
-                  }
-                  className={`flex items-center gap-2 rounded-lg border p-3 text-left transition-colors ${
-                    formData.votingMode === "yesno"
-                      ? "border-amber-500 bg-amber-900/30 text-amber-300"
-                      : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-500"
-                  }`}
-                >
-                  <ThumbsUp className="h-5 w-5 shrink-0" />
-                  <div>
-                    <p className="font-medium text-sm">Yes / No Vote</p>
-                    <p className="text-xs opacity-70">
-                      Approve or reject each position
-                    </p>
-                  </div>
-                </button>
-              </div>
+              <Tabs
+                value={ballotType}
+                onValueChange={(v) => {
+                  const next = v as "single" | "multiple";
+                  setBallotType(next);
+                  // Both ballot types are candidate-based.
+                  setFormData((prev) => ({ ...prev, votingMode: "candidate" }));
+                }}
+              >
+                <TabsList className="grid w-full grid-cols-2 bg-gray-800">
+                  <TabsTrigger
+                    value="single"
+                    className="data-[state=active]:bg-amber-600 data-[state=active]:text-white"
+                  >
+                    <ThumbsUp className="mr-1.5 h-4 w-4" />
+                    Single Candidate (Yes/No)
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="multiple"
+                    className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                  >
+                    <Users className="mr-1.5 h-4 w-4" />
+                    Multiple Candidates
+                  </TabsTrigger>
+                </TabsList>
 
-              {/* Explanation banners */}
-              {formData.votingMode === "candidate" && (
-                <div className="mt-2 rounded-lg border border-blue-700/50 bg-blue-900/20 p-3 text-sm text-blue-300">
-                  Voters choose one candidate <strong>per position</strong>.
-                  They can vote across all positions — voting for one position
-                  does not close the others.
-                </div>
-              )}
-              {formData.votingMode === "yesno" && (
-                <div className="mt-2 rounded-lg border border-amber-700/50 bg-amber-900/20 p-3 text-sm text-amber-300">
-                  Voters vote <strong>Yes</strong> or <strong>No</strong> for
-                  each position. They can vote on every position independently.
-                  No candidates are needed in this mode.
-                </div>
-              )}
+                <TabsContent value="single">
+                  <div className="rounded-lg border border-amber-700/50 bg-amber-900/20 p-3 text-sm text-amber-300">
+                    Add <strong>one candidate per position</strong>. Students
+                    will vote <strong>Yes</strong> to approve or{" "}
+                    <strong>No</strong> to reject that candidate for each
+                    position.
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="multiple">
+                  <div className="rounded-lg border border-blue-700/50 bg-blue-900/20 p-3 text-sm text-blue-300">
+                    Add <strong>several candidates per position</strong>.
+                    Students will choose <strong>one candidate</strong> per
+                    position. Voting on one position doesn't close the others.
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
 
             {/* Positions */}
@@ -999,7 +1028,9 @@ export default function VotingAdmin() {
             {formData.votingMode === "candidate" && (
               <div className="border-t border-gray-700 pt-4">
                 <h3 className="text-lg font-semibold text-white mb-4">
-                  Add Candidate
+                  {ballotType === "single"
+                    ? "Add Candidate (one per position)"
+                    : "Add Candidate"}
                 </h3>
                 <div className="space-y-3">
                   <div>
