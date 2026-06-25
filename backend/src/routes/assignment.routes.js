@@ -6,6 +6,7 @@ import {
   getAssignmentById,
   submitAssignment,
   gradeSubmission,
+  downloadSubmissionFile,
   updateAssignment,
   deleteAssignment,
   getAssignmentStats,
@@ -25,6 +26,13 @@ router.post(
   protect,
   uploadSubmissions.single("file"),
   submitAssignment,
+);
+
+// Submission file (preview/download) — owning lecturer, admin, or student
+router.get(
+  "/:id/submissions/:submissionId/file",
+  protect,
+  downloadSubmissionFile,
 );
 
 // General routes

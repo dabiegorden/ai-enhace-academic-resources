@@ -32,6 +32,7 @@ import {
   Eye,
   Upload,
   X,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FACULTY_NAMES, FACULTY_PROGRAMS } from "@/constants/faculties";
@@ -74,6 +75,12 @@ export default function LecturerAssignmentsPage() {
     useState<Assignment | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
+  // Per-submission grading inputs keyed by submission id.
+  const [gradeInputs, setGradeInputs] = useState<
+    Record<string, { grade: string; feedback: string }>
+  >({});
+  const [gradingId, setGradingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -295,9 +302,156 @@ export default function LecturerAssignmentsPage() {
     setEditDialogOpen(true);
   };
 
-  const openViewDialog = (assignment: Assignment) => {
+  const openViewDialog = async (assignment: Assignment) => {
+    // Show immediately with what we have, then fetch the fully-populated
+    // record (submissions include the student's name/email/studentId).
     setSelectedAssignment(assignment);
     setViewDialogOpen(true);
+    setGradeInputs({});
+    try {
+      setViewLoading(true);
+      const response = await fetch(`${apiUrl}/assignments/${assignment._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSelectedAssignment({
+          ...data.data,
+          attachments: data.data.attachments ?? [],
+          submissions: data.data.submissions ?? [],
+        });
+        // Seed grade inputs from existing grades.
+        const seed: Record<string, { grade: string; feedback: string }> = {};
+        (data.data.submissions ?? []).forEach((s: any) => {
+          seed[s._id] = {
+            grade: s.grade !== undefined && s.grade !== null ? String(s.grade) : "",
+            feedback: s.feedback || "",
+          };
+        });
+        setGradeInputs(seed);
+      }
+    } catch (error) {
+      console.error("Failed to load submissions:", error);
+      toast.error("Failed to load submissions");
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  // Fetch a submission file (auth-protected) and open it inline for preview.
+  const previewSubmission = async (submissionId: string) => {
+    if (!selectedAssignment) return;
+    try {
+      const response = await fetch(
+        `${apiUrl}/assignments/${selectedAssignment._id}/submissions/${submissionId}/file`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) {
+        let msg = "File not available";
+        try {
+          const d = await response.json();
+          msg = d.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to preview file",
+      );
+    }
+  };
+
+  // Fetch a submission file (auth-protected) and trigger a download.
+  const downloadSubmission = async (submissionId: string, fileName: string) => {
+    if (!selectedAssignment) return;
+    try {
+      const response = await fetch(
+        `${apiUrl}/assignments/${selectedAssignment._id}/submissions/${submissionId}/file?download=1`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) {
+        let msg = "File not available";
+        try {
+          const d = await response.json();
+          msg = d.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName || "submission";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to download file",
+      );
+    }
+  };
+
+  const handleGradeSubmission = async (submissionId: string) => {
+    if (!selectedAssignment) return;
+    const entry = gradeInputs[submissionId];
+    if (!entry || entry.grade === "") {
+      toast.error("Please enter a grade");
+      return;
+    }
+    const gradeNum = Number(entry.grade);
+    if (
+      Number.isNaN(gradeNum) ||
+      gradeNum < 0 ||
+      gradeNum > selectedAssignment.totalMarks
+    ) {
+      toast.error(`Grade must be between 0 and ${selectedAssignment.totalMarks}`);
+      return;
+    }
+    try {
+      setGradingId(submissionId);
+      const response = await fetch(
+        `${apiUrl}/assignments/${selectedAssignment._id}/submissions/${submissionId}/grade`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ grade: gradeNum, feedback: entry.feedback }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to grade submission");
+      }
+      toast.success("Submission graded");
+      // Reflect the new grade/status locally.
+      setSelectedAssignment((prev) =>
+        prev
+          ? {
+              ...prev,
+              submissions: prev.submissions.map((s: any) =>
+                s._id === submissionId
+                  ? { ...s, grade: gradeNum, feedback: entry.feedback, status: "graded" }
+                  : s,
+              ),
+            }
+          : prev,
+      );
+      fetchAssignments();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to grade submission",
+      );
+    } finally {
+      setGradingId(null);
+    }
   };
 
   const getStatusBadge = (assignment: Assignment) => {
@@ -771,10 +925,151 @@ export default function LecturerAssignmentsPage() {
               )}
 
               <div>
-                <Label>Submissions</Label>
-                <p className="text-sm mt-1">
-                  {selectedAssignment.submissions.length} student(s) submitted
-                </p>
+                <Label>
+                  Submissions ({selectedAssignment.submissions.length})
+                </Label>
+
+                {viewLoading ? (
+                  <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                    Loading submissions...
+                  </div>
+                ) : selectedAssignment.submissions.length === 0 ? (
+                  <p className="text-sm mt-2 text-muted-foreground">
+                    No students have submitted yet.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {selectedAssignment.submissions.map((sub: any) => {
+                      const student = sub.student || {};
+                      const studentName =
+                        typeof student === "object"
+                          ? `${student.firstName || ""} ${student.lastName || ""}`.trim() ||
+                            "Unknown Student"
+                          : "Unknown Student";
+                      const input = gradeInputs[sub._id] || {
+                        grade: "",
+                        feedback: "",
+                      };
+                      return (
+                        <div
+                          key={sub._id}
+                          className="rounded-lg border p-3 space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold">
+                                {studentName}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {typeof student === "object" &&
+                                  (student.studentId || student.email)}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Submitted:{" "}
+                                {sub.submittedAt
+                                  ? new Date(sub.submittedAt).toLocaleString()
+                                  : "—"}
+                              </p>
+                            </div>
+                            <Badge
+                              className={
+                                sub.status === "graded"
+                                  ? "bg-green-100 text-green-700"
+                                  : sub.status === "late"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-blue-100 text-blue-700"
+                              }
+                            >
+                              {sub.status}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 rounded bg-muted p-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="size-4 shrink-0" />
+                              <span className="text-sm truncate">
+                                {sub.fileName}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => previewSubmission(sub._id)}
+                              >
+                                <Eye className="size-4 mr-1" />
+                                Preview
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  downloadSubmission(sub._id, sub.fileName)
+                                }
+                              >
+                                <Download className="size-4 mr-1" />
+                                Download
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Grading */}
+                          <div className="grid gap-2 sm:grid-cols-[120px_1fr_auto] sm:items-end">
+                            <div>
+                              <Label className="text-xs">
+                                Grade / {selectedAssignment.totalMarks}
+                              </Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={selectedAssignment.totalMarks}
+                                value={input.grade}
+                                onChange={(e) =>
+                                  setGradeInputs((prev) => ({
+                                    ...prev,
+                                    [sub._id]: {
+                                      ...input,
+                                      grade: e.target.value,
+                                    },
+                                  }))
+                                }
+                                placeholder="0"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Feedback</Label>
+                              <Input
+                                value={input.feedback}
+                                onChange={(e) =>
+                                  setGradeInputs((prev) => ({
+                                    ...prev,
+                                    [sub._id]: {
+                                      ...input,
+                                      feedback: e.target.value,
+                                    },
+                                  }))
+                                }
+                                placeholder="Optional feedback"
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => handleGradeSubmission(sub._id)}
+                              disabled={gradingId === sub._id}
+                            >
+                              {gradingId === sub._id
+                                ? "Saving..."
+                                : sub.status === "graded"
+                                  ? "Update"
+                                  : "Grade"}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}

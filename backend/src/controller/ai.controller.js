@@ -1,4 +1,4 @@
-import { getGeminiModel } from "../config/gemini.js";
+import { getAIModel } from "../config/github-ai.js";
 import LectureNote from "../models/lecturenote.model.js";
 import ChatRoom from "../models/chatroom.model.js";
 
@@ -92,7 +92,7 @@ export const summarizeLectureNote = async (req, res) => {
       });
     }
 
-    const model = getGeminiModel("gemini-3.5-flash");
+    const model = getAIModel();
 
     const prompt = `You are an AI assistant helping students understand lecture materials.
 Summarise the following lecture note clearly and concisely for students.
@@ -147,7 +147,7 @@ export const answerStudentQuestion = async (req, res) => {
       if (lectureNote) contextInfo = buildNoteContext(lectureNote);
     }
 
-    const model = getGeminiModel("gemini-3.5-flash");
+    const model = getAIModel();
 
     const prompt = `You are an AI academic assistant for Catholic University of Ghana students.
 ${contextInfo ? `Context:\n${contextInfo}\n` : ""}
@@ -189,7 +189,7 @@ export const summarizeChatDiscussion = async (req, res) => {
     }
 
     const transcript = buildTranscript(chatRoom.messages);
-    const model = getGeminiModel("gemini-3.5-flash");
+    const model = getAIModel();
 
     const prompt = `Summarise this student discussion from the chat room "${chatRoom.name}".
 
@@ -295,7 +295,7 @@ export const analyseChatRoom = async (req, res) => {
     }
 
     const transcript = buildTranscript(messages, 80);
-    const model = getGeminiModel("gemini-3.5-flash");
+    const model = getAIModel();
 
     const jsonPrompt = `Analyse the following chat room transcript from "${chatRoom.name}" at Catholic University of Ghana.
 
@@ -413,7 +413,7 @@ export const generateExamQuestions = async (req, res) => {
       .map((n) => buildNoteContext(n))
       .join("\n---\n");
 
-    const model = getGeminiModel("gemini-3.5-flash");
+    const model = getAIModel();
 
     const prompt = `Generate ${numberOfQuestions || 10} exam questions for university students.
 
@@ -480,7 +480,7 @@ Return ONLY a JSON array (no markdown) with this structure:
 export const getStudySuggestions = async (req, res) => {
   try {
     const { course, topics, upcomingExam } = req.body;
-    const model = getGeminiModel("gemini-3.5-flash");
+    const model = getAIModel();
 
     const prompt = `You are an AI study advisor for Catholic University of Ghana students.
 
@@ -516,7 +516,7 @@ export const explainConcept = async (req, res) => {
       });
     }
 
-    const model = getGeminiModel("gemini-3.5-flash");
+    const model = getAIModel();
 
     const prompt = `You are an AI tutor at Catholic University of Ghana.
 
@@ -575,7 +575,7 @@ export const generateNoteQuiz = async (req, res) => {
       });
     }
 
-    const model = getGeminiModel("gemini-3.5-flash");
+    const model = getAIModel();
 
     const difficultyInstructions = {
       easy: "Focus on basic recall and simple understanding questions suitable for first-time learners.",
@@ -744,7 +744,7 @@ export const getNoteRecommendations = async (req, res) => {
             .join("\n")}`
         : "";
 
-    const model = getGeminiModel("gemini-3.5-flash");
+    const model = getAIModel();
 
     const prompt = `You are an AI academic advisor for Catholic University of Ghana students.
 Analyse the following lecture note and produce personalised study recommendations.

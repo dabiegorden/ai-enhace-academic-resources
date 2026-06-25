@@ -68,6 +68,10 @@ interface Assignment {
     feedback?: string;
     status: "submitted" | "graded" | "late";
   }>;
+  // Provided by the backend (getMyAssignments) so the client doesn't have to
+  // match submissions by user id.
+  mySubmission?: Assignment["submissions"][number] | null;
+  hasSubmitted?: boolean;
   isActive: boolean;
   createdAt: string;
 }
@@ -88,8 +92,17 @@ const StudentsAssignments = () => {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const userId =
-    typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+  // The app stores the logged-in user as a JSON object under "user" (there is
+  // no separate "userId" key), so derive the id from there.
+  const userId = (() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const u = JSON.parse(localStorage.getItem("user") || "null");
+      return u?.id || u?._id || null;
+    } catch {
+      return null;
+    }
+  })();
 
   // Fetch assignments
   const fetchAssignments = useCallback(async () => {
@@ -102,7 +115,6 @@ const StudentsAssignments = () => {
       });
 
       const data = await response.json();
-      console.log("API Response:", data); // Debug log
 
       if (data.success) {
         setAssignments(data.data || []);
@@ -121,30 +133,20 @@ const StudentsAssignments = () => {
     fetchAssignments();
   }, [fetchAssignments]);
 
-  // Check if assignment is submitted by current student
+  // Check if assignment is submitted by current student. Prefer the
+  // backend-provided `mySubmission` (always accurate); fall back to matching
+  // the submissions array by the current user's id.
   const getStudentSubmission = (assignment: Assignment) => {
+    if (assignment.mySubmission) return assignment.mySubmission;
+    if (assignment.hasSubmitted && assignment.submissions.length === 0)
+      return undefined;
     if (!userId) return undefined;
 
-    const submission = assignment.submissions.find((sub) => {
-      // Handle both string ObjectId and populated object
+    return assignment.submissions.find((sub) => {
       const studentId =
         typeof sub.student === "string" ? sub.student : sub.student?._id;
-
       return studentId === userId;
     });
-
-    console.log(`Assignment ${assignment._id} submission check:`, {
-      userId,
-      hasSubmission: !!submission,
-      submissions: assignment.submissions.map((s) => ({
-        student: typeof s.student === "string" ? s.student : s.student?._id,
-        match:
-          (typeof s.student === "string" ? s.student : s.student?._id) ===
-          userId,
-      })),
-    }); // Debug log
-
-    return submission;
   };
 
   // Check if assignment is overdue
@@ -254,13 +256,6 @@ const StudentsAssignments = () => {
       return !!submission;
     }
   });
-
-  console.log("Filtered assignments:", {
-    total: assignments.length,
-    active: assignments.filter((a) => a.isActive).length,
-    filtered: filteredAssignments.length,
-    activeTab,
-  }); // Debug log
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -455,18 +450,18 @@ const StudentsAssignments = () => {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <h3 className="font-semibold mb-2 text-gray-900">
+                <h3 className="font-semibold mb-2 text-foreground">
                   Description
                 </h3>
-                <p className="text-sm text-gray-700">
+                <p className="text-sm text-muted-foreground">
                   {selectedAssignment?.description}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="font-semibold mb-2 text-gray-900">Details</h3>
-                  <div className="space-y-2 text-sm text-gray-700">
+                  <h3 className="font-semibold mb-2 text-foreground">Details</h3>
+                  <div className="space-y-2 text-sm text-muted-foreground">
                     <p>
                       <strong>Faculty:</strong> {selectedAssignment?.faculty}
                     </p>
@@ -483,8 +478,8 @@ const StudentsAssignments = () => {
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2 text-gray-900">Timeline</h3>
-                  <div className="space-y-2 text-sm text-gray-700">
+                  <h3 className="font-semibold mb-2 text-foreground">Timeline</h3>
+                  <div className="space-y-2 text-sm text-muted-foreground">
                     <p>
                       <strong>Due Date:</strong>{" "}
                       {selectedAssignment?.dueDate &&
@@ -507,7 +502,7 @@ const StudentsAssignments = () => {
               {selectedAssignment?.attachments &&
                 selectedAssignment.attachments.length > 0 && (
                   <div>
-                    <h3 className="font-semibold mb-2 text-gray-900">
+                    <h3 className="font-semibold mb-2 text-foreground">
                       Assignment Files
                     </h3>
                     <div className="space-y-2">
@@ -549,7 +544,7 @@ const StudentsAssignments = () => {
               {selectedAssignment &&
                 getStudentSubmission(selectedAssignment) && (
                   <div>
-                    <h3 className="font-semibold mb-2 text-gray-900">
+                    <h3 className="font-semibold mb-2 text-foreground">
                       Your Submission
                     </h3>
                     {(() => {

@@ -1,6 +1,31 @@
 import Assignment from "../models/assignment.model.js";
 import fs from "fs";
+import path from "path";
 import { broadcastToRoles } from "../controller/notification.controller.js";
+
+// Base directory where submission files live on disk (mirrors the multer
+// upload middleware). Used to resolve a submission's file when the stored
+// absolute filePath is unavailable (e.g. across machines/deploys).
+const isVercel = process.env.VERCEL === "1";
+const submissionsDir = isVercel
+  ? "/tmp/uploads/submissions"
+  : path.join(process.cwd(), "src/public/uploads/submissions");
+
+// Resolves an existing file path for a submission, or null if none exists.
+const resolveSubmissionFilePath = (submission) => {
+  if (submission.filePath && fs.existsSync(submission.filePath)) {
+    return submission.filePath;
+  }
+  // Fall back to the submissions directory + the stored filename.
+  const name = submission.fileUrl
+    ? path.basename(submission.fileUrl)
+    : submission.fileName;
+  if (name) {
+    const candidate = path.join(submissionsDir, name);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+};
 
 // Create assignment
 export const createAssignment = async (req, res) => {
@@ -331,6 +356,57 @@ export const gradeSubmission = async (req, res) => {
       message: "Submission graded successfully",
       data: submission,
     });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Download / preview a student's submission file
+// @route  GET /api/assignments/:id/submissions/:submissionId/file
+// @access Private (lecturer who owns the assignment, admin, or the owning student)
+export const downloadSubmissionFile = async (req, res) => {
+  try {
+    const { id, submissionId } = req.params;
+    const assignment = await Assignment.findById(id);
+    if (!assignment) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Assignment not found" });
+    }
+
+    const submission = assignment.submissions.id(submissionId);
+    if (!submission) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Submission not found" });
+    }
+
+    // Authorize: owning lecturer, admin, or the student who submitted.
+    const isOwnerLecturer = assignment.lecturer.toString() === req.user.id;
+    const isAdmin = req.user.role === "admin";
+    const isOwningStudent = submission.student.toString() === req.user.id;
+    if (!isOwnerLecturer && !isAdmin && !isOwningStudent) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this submission",
+      });
+    }
+
+    const filePath = resolveSubmissionFilePath(submission);
+    if (!filePath) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "The submitted file is no longer available on the server. The student may need to re-submit.",
+      });
+    }
+
+    // ?download=1 forces a download; otherwise serve inline for previewing.
+    if (req.query.download === "1") {
+      return res.download(filePath, submission.fileName || path.basename(filePath));
+    }
+    res.setHeader("Content-Disposition", "inline");
+    return res.sendFile(path.resolve(filePath));
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

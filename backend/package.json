@@ -12,8 +12,9 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@google/genai": "^1.35.0",
-    "@google/generative-ai": "^0.24.1",
+    "@azure-rest/ai-inference": "^1.0.0-beta.6",
+    "@azure/core-auth": "^1.10.1",
+    "@azure/core-sse": "latest",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.8.0",
     "cookie-parser": "^1.4.7",
@@ -29,9 +30,6 @@
     "nodemon": "^3.1.11",
     "pdfkit": "^0.17.2",
     "socket.io": "^4.8.3",
-    "streamifier": "^0.1.1",
-    "@azure-rest/ai-inference": "latest",
-    "@azure/core-auth": "latest",
-    "@azure/core-sse": "latest"
+    "streamifier": "^0.1.1"
   }
 }
