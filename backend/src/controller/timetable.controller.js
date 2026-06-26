@@ -361,13 +361,20 @@ export const getMyTimetable = async (req, res) => {
     // its yearOfStudy equals the student's year OR its level matches the
     // derived level — this keeps things robust if a lecturer set one but not
     // the other.
+    // Show the student's OWN faculty timetables plus "General" (All Faculties)
+    // timetables. A "General" program timetable targets all programs in the
+    // faculty. Only published, active timetables are returned.
+    const levelOr = [{ yearOfStudy: req.user.yearOfStudy }];
+    if (studentLevel) levelOr.push({ level: studentLevel });
+    levelOr.push({ yearOfStudy: 0 });
     const query = {
-      faculty: req.user.faculty,
       isActive: true,
       isPublished: true,
-      $or: [{ yearOfStudy: req.user.yearOfStudy }],
+      $and: [
+        { $or: [{ faculty: req.user.faculty }, { faculty: "General" }] },
+        { $or: levelOr },
+      ],
     };
-    if (studentLevel) query.$or.push({ level: studentLevel });
 
     if (semester) query.semester = semester;
     if (academicYear) query.academicYear = academicYear;

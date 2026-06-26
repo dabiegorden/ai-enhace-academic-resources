@@ -87,6 +87,7 @@ const LecturerChatPage = () => {
     course: "",
     faculty: "",
     program: "",
+    targetYear: "0",
   });
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -176,6 +177,7 @@ const LecturerChatPage = () => {
         payload.faculty = formData.faculty;
         payload.program = formData.program.trim();
       }
+      payload.targetYear = formData.targetYear;
 
       const res = await fetch(`${apiUrl}/chat/rooms`, {
         method: "POST",
@@ -322,6 +324,7 @@ const LecturerChatPage = () => {
       course: "",
       faculty: "",
       program: "",
+      targetYear: "0",
     });
 
   return (
@@ -465,6 +468,7 @@ const LecturerChatPage = () => {
                           course: room.course || "",
                           faculty: room.faculty || "",
                           program: room.program || "",
+                          targetYear: String((room as any).targetYear ?? 0),
                         });
                         setEditOpen(true);
                       }}
@@ -637,6 +641,26 @@ const LecturerChatPage = () => {
                   className="border-gray-700 bg-gray-800"
                 />
               ))}
+            <div>
+              <label className="text-sm text-gray-400">Year / Level</label>
+              <Select
+                value={formData.targetYear}
+                onValueChange={(v) =>
+                  setFormData({ ...formData, targetYear: v })
+                }
+              >
+                <SelectTrigger className="border-gray-700 bg-gray-800 mt-1">
+                  <SelectValue placeholder="Select year" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                  <SelectItem value="0">All Years / Levels</SelectItem>
+                  <SelectItem value="1">Year 1</SelectItem>
+                  <SelectItem value="2">Year 2</SelectItem>
+                  <SelectItem value="3">Year 3</SelectItem>
+                  <SelectItem value="4">Year 4</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button

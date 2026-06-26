@@ -5,8 +5,11 @@ import {
   getMyAssignments,
   getAssignmentById,
   submitAssignment,
+  updateSubmission,
+  deleteSubmission,
   gradeSubmission,
   downloadSubmissionFile,
+  downloadAssignmentFile,
   updateAssignment,
   deleteAssignment,
   getAssignmentStats,
@@ -27,12 +30,26 @@ router.post(
   uploadSubmissions.single("file"),
   submitAssignment,
 );
+router.put(
+  "/:id/submit",
+  protect,
+  uploadSubmissions.single("file"),
+  updateSubmission,
+);
+router.delete("/:id/submit", protect, deleteSubmission);
 
 // Submission file (preview/download) — owning lecturer, admin, or student
 router.get(
   "/:id/submissions/:submissionId/file",
   protect,
   downloadSubmissionFile,
+);
+
+// Assignment attachment file (preview/download) — any authenticated user
+router.get(
+  "/:id/attachments/:index/file",
+  protect,
+  downloadAssignmentFile,
 );
 
 // General routes

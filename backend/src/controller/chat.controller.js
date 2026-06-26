@@ -11,6 +11,13 @@ import ChatRoom from "../models/chatroom.model.js";
 // ---------------------------------------------------------------------------
 const canAccessRoom = (user, room) => {
   if (user.role === "admin") return true;
+
+  // Year/level restriction: a room targeted at a specific year is only
+  // accessible to students of that year. Staff (lecturers) are not blocked.
+  if (room.targetYear && room.targetYear > 0 && user.role === "student") {
+    if (Number(user.yearOfStudy) !== Number(room.targetYear)) return false;
+  }
+
   if (room.type === "general") return true;
   if (room.faculty) {
     return (
@@ -27,7 +34,8 @@ const canAccessRoom = (user, room) => {
 // @access  Private
 export const createChatRoom = async (req, res) => {
   try {
-    const { name, description, type, course, faculty, program } = req.body;
+    const { name, description, type, course, faculty, program, targetYear } =
+      req.body;
 
     if (!name || !type) {
       return res.status(400).json({
@@ -65,6 +73,7 @@ export const createChatRoom = async (req, res) => {
       course,
       faculty,
       program,
+      targetYear: targetYear ? parseInt(targetYear) : 0,
       createdBy: req.user.id,
       members: [req.user.id],
     });
@@ -350,6 +359,18 @@ export const sendMessage = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "You must join the room to send messages",
+      });
+    }
+
+    // Only the lecturer/admin who created the room may post staff messages.
+    // Other lecturers/admins (even if members) cannot write in it. Students may
+    // still chat.
+    const isStaff = req.user.role === "lecturer" || req.user.role === "admin";
+    if (isStaff && chatRoom.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only the creator of this chat room can post messages in it.",
       });
     }
 

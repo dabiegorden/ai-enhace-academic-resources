@@ -741,13 +741,20 @@ const LecturerTimeTable = () => {
               <Select
                 value={formData.faculty}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, faculty: value, programName: "" })
+                  setFormData({
+                    ...formData,
+                    faculty: value,
+                    // "General" faculty (all faculties) auto-targets all
+                    // programs; otherwise reset the program choice.
+                    programName: value === "General" ? "General" : "",
+                  })
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select faculty" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="General">General (All Faculties)</SelectItem>
                   {FACULTIES.map((f) => (
                     <SelectItem key={f} value={f}>
                       {f}
@@ -758,8 +765,19 @@ const LecturerTimeTable = () => {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="programName">Program Name *</Label>
-              {formData.faculty &&
-              FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+              {formData.faculty === "General" ? (
+                <Select value="General" disabled>
+                  <SelectTrigger id="programName">
+                    <SelectValue placeholder="General (All Programs)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="General">
+                      General (All Programs)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : formData.faculty &&
+                FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
                 <Select
                   value={formData.programName}
                   onValueChange={(value) =>
@@ -770,6 +788,9 @@ const LecturerTimeTable = () => {
                     <SelectValue placeholder="Select program" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="General">
+                      General (All Programmes in Faculty)
+                    </SelectItem>
                     {FACULTY_PROGRAMS[formData.faculty].map((program) => (
                       <SelectItem key={program} value={program}>
                         {program}

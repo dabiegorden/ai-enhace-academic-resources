@@ -44,6 +44,8 @@ const AdminStudentsPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [facultyFilter, setFacultyFilter] = useState<string>("all");
+  const [yearFilter, setYearFilter] = useState<string>("all");
+  const [programFilter, setProgramFilter] = useState<string>("all");
 
   // Dialog states
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -99,7 +101,9 @@ const AdminStudentsPage = () => {
   const filterStudents = (
     studentList: Student[],
     search: string,
-    faculty: string
+    faculty: string,
+    year: string = yearFilter,
+    program: string = programFilter
   ) => {
     let filtered = studentList;
 
@@ -119,19 +123,50 @@ const AdminStudentsPage = () => {
       filtered = filtered.filter((student) => student.faculty === faculty);
     }
 
+    if (year !== "all") {
+      filtered = filtered.filter(
+        (student) => String(student.yearOfStudy) === year
+      );
+    }
+
+    if (program !== "all") {
+      filtered = filtered.filter((student) => student.program === program);
+    }
+
     setFilteredStudents(filtered);
   };
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
-    filterStudents(students, value, facultyFilter);
+    filterStudents(students, value, facultyFilter, yearFilter, programFilter);
   };
 
   const handleFacultyFilterChange = (value: string) => {
     setFacultyFilter(value);
-    filterStudents(students, searchTerm, value);
+    filterStudents(students, searchTerm, value, yearFilter, programFilter);
   };
+
+  const handleYearFilterChange = (value: string) => {
+    setYearFilter(value);
+    filterStudents(students, searchTerm, facultyFilter, value, programFilter);
+  };
+
+  const handleProgramFilterChange = (value: string) => {
+    setProgramFilter(value);
+    filterStudents(students, searchTerm, facultyFilter, yearFilter, value);
+  };
+
+  // Unique program list derived from loaded students, scoped to the selected
+  // faculty — powers the Program sorting dropdown.
+  const programOptions = Array.from(
+    new Set(
+      students
+        .filter((st) => facultyFilter === "all" || st.faculty === facultyFilter)
+        .map((st) => st.program)
+        .filter(Boolean)
+    )
+  ).sort();
 
   const handleViewStudent = (student: Student) => {
     setSelectedStudent(student);
@@ -387,7 +422,7 @@ const AdminStudentsPage = () => {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Input
             id="student-search"
             name="student-search"
@@ -409,6 +444,32 @@ const AdminStudentsPage = () => {
               {FACULTIES.map((faculty) => (
                 <SelectItem key={faculty} value={faculty}>
                   {faculty}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={yearFilter} onValueChange={handleYearFilterChange}>
+            <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+              <SelectValue placeholder="Filter by year" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectItem value="all">All Years</SelectItem>
+              <SelectItem value="1">Year 1</SelectItem>
+              <SelectItem value="2">Year 2</SelectItem>
+              <SelectItem value="3">Year 3</SelectItem>
+              <SelectItem value="4">Year 4</SelectItem>
+              <SelectItem value="5">Year 5</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={programFilter} onValueChange={handleProgramFilterChange}>
+            <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+              <SelectValue placeholder="Filter by program" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectItem value="all">All Programs</SelectItem>
+              {programOptions.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
                 </SelectItem>
               ))}
             </SelectContent>

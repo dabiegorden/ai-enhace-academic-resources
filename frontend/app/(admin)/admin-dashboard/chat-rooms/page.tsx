@@ -69,6 +69,7 @@ const AdminChatRoomPage = () => {
     course: "",
     faculty: "",
     program: "",
+    targetYear: "0",
   });
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -143,6 +144,7 @@ const AdminChatRoomPage = () => {
         payload.faculty = formData.faculty;
         payload.program = formData.program.trim();
       }
+      payload.targetYear = formData.targetYear;
 
       const res = await fetch(`${apiUrl}/chat/rooms`, {
         method: "POST",
@@ -234,6 +236,7 @@ const AdminChatRoomPage = () => {
       course: "",
       faculty: "",
       program: "",
+      targetYear: "0",
     });
 
   return (
@@ -369,12 +372,13 @@ const AdminChatRoomPage = () => {
                       onClick={() => {
                         setSelectedRoom(room);
                         setFormData({
-                          name: room.name,
-                          description: room.description || "",
-                          type: room.type,
-                          course: room.course || "",
-                          faculty: room.faculty || "",
-                          program: room.program || "",
+                          name: room?.name,
+                          description: room?.description || "",
+                          type: room?.type,
+                          course: room?.course || "",
+                          faculty: room?.faculty || "",
+                          program: room?.program || "",
+                          targetYear: String((room as any).targetYear ?? 0),
                         });
                         setEditOpen(true);
                       }}
@@ -422,19 +426,19 @@ const AdminChatRoomPage = () => {
                 { l: "Description", v: selectedRoom.description || "—" },
                 { l: "Type", v: selectedRoom.type },
                 ...(selectedRoom.course
-                  ? [{ l: "Course", v: selectedRoom.course }]
+                  ? [{ l: "Course", v: selectedRoom?.course }]
                   : []),
                 ...(selectedRoom.faculty
-                  ? [{ l: "Faculty", v: selectedRoom.faculty }]
+                  ? [{ l: "Faculty", v: selectedRoom?.faculty }]
                   : []),
                 ...(selectedRoom.program
-                  ? [{ l: "Program", v: selectedRoom.program }]
+                  ? [{ l: "Program", v: selectedRoom?.program }]
                   : []),
                 {
                   l: "Created by",
-                  v: `${selectedRoom.createdBy.firstName} ${selectedRoom.createdBy.lastName}`,
+                  v: `${selectedRoom?.createdBy?.firstName} ${selectedRoom?.createdBy?.lastName}`,
                 },
-                { l: "Members", v: String(selectedRoom.members?.length ?? 0) },
+                { l: "Members", v: String(selectedRoom?.members?.length ?? 0) },
               ].map(({ l, v }) => (
                 <div key={l}>
                   <p className="text-xs text-gray-500">{l}</p>
@@ -556,6 +560,26 @@ const AdminChatRoomPage = () => {
                   className="border-gray-700 bg-gray-800"
                 />
               ))}
+            <div>
+              <label className="text-sm text-gray-400">Year / Level</label>
+              <Select
+                value={formData.targetYear}
+                onValueChange={(v) =>
+                  setFormData({ ...formData, targetYear: v })
+                }
+              >
+                <SelectTrigger className="border-gray-700 bg-gray-800 mt-1">
+                  <SelectValue placeholder="Select year" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                  <SelectItem value="0">All Years / Levels</SelectItem>
+                  <SelectItem value="1">Year 1</SelectItem>
+                  <SelectItem value="2">Year 2</SelectItem>
+                  <SelectItem value="3">Year 3</SelectItem>
+                  <SelectItem value="4">Year 4</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button

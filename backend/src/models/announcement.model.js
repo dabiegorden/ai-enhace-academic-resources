@@ -22,6 +22,11 @@ const announcementSchema = new mongoose.Schema(
         return this.type === "faculty";
       },
     },
+    // Target year/level of study. 0 means "All years" (visible to every level).
+    targetYear: {
+      type: Number,
+      default: 0,
+    },
     author: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

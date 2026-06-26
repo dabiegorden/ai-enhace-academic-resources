@@ -8,7 +8,7 @@ import { broadcastToRoles } from "../controller/notification.controller.js";
 // @access  Private (Lecturer/Admin)
 export const createAnnouncement = async (req, res) => {
   try {
-    const { title, content, type, faculty, expiryDate } = req.body;
+    const { title, content, type, faculty, expiryDate, targetYear } = req.body;
 
     if (!title || !content || !type) {
       return res.status(400).json({
@@ -58,6 +58,7 @@ export const createAnnouncement = async (req, res) => {
       content,
       type,
       faculty,
+      targetYear: targetYear ? parseInt(targetYear) : 0,
       author: req.user.id,
       attachments,
       expiryDate,
@@ -116,6 +117,18 @@ export const getAllAnnouncements = async (req, res) => {
         $or: [
           { type: { $ne: "faculty" } },
           { type: "faculty", faculty: req.user.faculty },
+        ],
+      });
+    }
+
+    // Year scoping: students only see announcements targeted at "All years"
+    // (targetYear 0/unset) or their own year of study.
+    if (req.user.role === "student") {
+      andConditions.push({
+        $or: [
+          { targetYear: 0 },
+          { targetYear: { $exists: false } },
+          { targetYear: req.user.yearOfStudy },
         ],
       });
     }
@@ -207,12 +220,13 @@ export const updateAnnouncement = async (req, res) => {
       });
     }
 
-    const { title, content, isPinned, expiryDate } = req.body;
+    const { title, content, isPinned, expiryDate, targetYear } = req.body;
 
     if (title) announcement.title = title;
     if (content) announcement.content = content;
     if (isPinned !== undefined) announcement.isPinned = isPinned;
     if (expiryDate) announcement.expiryDate = expiryDate;
+    if (targetYear !== undefined) announcement.targetYear = parseInt(targetYear);
 
     await announcement.save();
 

@@ -93,6 +93,7 @@ const LecturerAnnouncementPage = () => {
     content: "",
     type: "general" as "general" | "faculty" | "academic" | "event" | "urgent",
     faculty: "",
+    targetYear: "0",
     expiryDate: "",
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -200,6 +201,7 @@ const LecturerAnnouncementPage = () => {
       form.append("content", formData.content.trim());
       form.append("type", formData.type);
       if (formData.type === "faculty") form.append("faculty", formData.faculty);
+      form.append("targetYear", formData.targetYear);
       if (formData.expiryDate) form.append("expiryDate", formData.expiryDate);
       selectedFiles.forEach((file) => form.append("files", file));
 
@@ -347,6 +349,7 @@ const LecturerAnnouncementPage = () => {
       content: "",
       type: "general",
       faculty: "",
+      targetYear: "0",
       expiryDate: "",
     });
     setSelectedFiles([]);
@@ -549,6 +552,7 @@ const LecturerAnnouncementPage = () => {
                         content: announcement.content,
                         type: announcement.type,
                         faculty: announcement.faculty || "",
+                        targetYear: String((announcement as any).targetYear ?? 0),
                         expiryDate: announcement.expiryDate
                           ? new Date(announcement.expiryDate)
                               .toISOString()
@@ -719,6 +723,26 @@ const LecturerAnnouncementPage = () => {
                 </SelectContent>
               </Select>
             )}
+            <div>
+              <label className="text-sm text-gray-400">Target Year/Level</label>
+              <Select
+                value={formData.targetYear}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, targetYear: value })
+                }
+              >
+                <SelectTrigger className="border-gray-700 bg-gray-800 mt-1">
+                  <SelectValue placeholder="Select year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">All Years</SelectItem>
+                  <SelectItem value="1">Year 1</SelectItem>
+                  <SelectItem value="2">Year 2</SelectItem>
+                  <SelectItem value="3">Year 3</SelectItem>
+                  <SelectItem value="4">Year 4</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <label className="text-sm text-gray-400">
                 Expiry Date (optional)

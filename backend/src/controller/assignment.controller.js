@@ -10,6 +10,24 @@ const isVercel = process.env.VERCEL === "1";
 const submissionsDir = isVercel
   ? "/tmp/uploads/submissions"
   : path.join(process.cwd(), "src/public/uploads/submissions");
+const assignmentsDir = isVercel
+  ? "/tmp/uploads/assignments"
+  : path.join(process.cwd(), "src/public/uploads/assignments");
+
+// Resolves an existing file path for an assignment attachment, or null.
+const resolveAttachmentFilePath = (attachment) => {
+  if (attachment.filePath && fs.existsSync(attachment.filePath)) {
+    return attachment.filePath;
+  }
+  const name = attachment.url
+    ? path.basename(attachment.url)
+    : attachment.fileName;
+  if (name) {
+    const candidate = path.join(assignmentsDir, name);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+};
 
 // Resolves an existing file path for a submission, or null if none exists.
 const resolveSubmissionFilePath = (submission) => {
@@ -97,15 +115,17 @@ export const createAssignment = async (req, res) => {
       year: "numeric",
     });
 
-    // Import User here to find matching students
+    // Import User here to find matching students.
+    // Honour the "General" wildcards: a "General" faculty targets the whole
+    // school, a "General"/"All Programs" program targets the whole faculty, and
+    // yearOfStudy 0 targets all levels/years.
     const User = (await import("../models/user.model.js")).default;
-    const students = await User.find({
-      role: "student",
-      faculty,
-      program,
-      yearOfStudy: parseInt(yearOfStudy),
-      isActive: true,
-    }).select("_id");
+    const studentQuery = { role: "student", isActive: true };
+    if (faculty && faculty !== "General") studentQuery.faculty = faculty;
+    if (program && program !== "General" && program !== "All Programs")
+      studentQuery.program = program;
+    if (parseInt(yearOfStudy)) studentQuery.yearOfStudy = parseInt(yearOfStudy);
+    const students = await User.find(studentQuery).select("_id");
     const studentIds = students.map((s) => s._id.toString());
 
     if (studentIds.length > 0) {
@@ -202,11 +222,22 @@ export const getMyAssignments = async (req, res) => {
         message: "This endpoint is only for students",
       });
     const { status, page = 1, limit = 20 } = req.query;
+    // Match assignments scoped to this student, honouring the "General"
+    // wildcards: faculty "General" = whole school, program "General"/"All
+    // Programs" = whole faculty, yearOfStudy 0 = all levels/years.
     const query = {
-      faculty: req.user.faculty,
-      program: req.user.program,
-      yearOfStudy: req.user.yearOfStudy,
       isActive: true,
+      $and: [
+        { $or: [{ faculty: req.user.faculty }, { faculty: "General" }] },
+        {
+          $or: [
+            { program: req.user.program },
+            { program: "General" },
+            { program: "All Programs" },
+          ],
+        },
+        { $or: [{ yearOfStudy: req.user.yearOfStudy }, { yearOfStudy: 0 }] },
+      ],
     };
     if (status === "pending") {
       query.dueDate = { $gte: new Date() };
@@ -315,6 +346,95 @@ export const submitAssignment = async (req, res) => {
   }
 };
 
+// Update (replace) a student's own submission file
+// @route  PUT /api/assignments/:id/submit
+// @access Private (the owning student, before/after due date)
+export const updateSubmission = async (req, res) => {
+  try {
+    if (!req.file)
+      return res
+        .status(400)
+        .json({ success: false, message: "Please upload a file" });
+    const assignment = await Assignment.findById(req.params.id);
+    if (!assignment) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res
+        .status(404)
+        .json({ success: false, message: "Assignment not found" });
+    }
+    const submission = assignment.submissions.find(
+      (s) => s.student.toString() === req.user.id,
+    );
+    if (!submission) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(404).json({
+        success: false,
+        message: "You have not submitted this assignment yet",
+      });
+    }
+    if (submission.status === "graded") {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(400).json({
+        success: false,
+        message: "This submission has been graded and can no longer be changed",
+      });
+    }
+    // Remove the previous file from disk.
+    const old = resolveSubmissionFilePath(submission);
+    if (old && fs.existsSync(old)) fs.unlinkSync(old);
+
+    const isLate = new Date() > new Date(assignment.dueDate);
+    submission.fileUrl = `/uploads/submissions/${req.file.filename}`;
+    submission.fileName = req.file.originalname;
+    submission.filePath = req.file.path;
+    submission.submittedAt = new Date();
+    submission.status = isLate ? "late" : "submitted";
+    await assignment.save();
+    res.status(200).json({
+      success: true,
+      message: "Submission updated successfully",
+      data: { submittedAt: submission.submittedAt, isLate },
+    });
+  } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Delete a student's own submission
+// @route  DELETE /api/assignments/:id/submit
+// @access Private (the owning student)
+export const deleteSubmission = async (req, res) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id);
+    if (!assignment)
+      return res
+        .status(404)
+        .json({ success: false, message: "Assignment not found" });
+    const submission = assignment.submissions.find(
+      (s) => s.student.toString() === req.user.id,
+    );
+    if (!submission)
+      return res
+        .status(404)
+        .json({ success: false, message: "Submission not found" });
+    if (submission.status === "graded")
+      return res.status(400).json({
+        success: false,
+        message: "This submission has been graded and can no longer be deleted",
+      });
+    const filePath = resolveSubmissionFilePath(submission);
+    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    submission.deleteOne();
+    await assignment.save();
+    res
+      .status(200)
+      .json({ success: true, message: "Submission deleted successfully" });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 // Grade submission
 export const gradeSubmission = async (req, res) => {
   try {
@@ -404,6 +524,48 @@ export const downloadSubmissionFile = async (req, res) => {
     // ?download=1 forces a download; otherwise serve inline for previewing.
     if (req.query.download === "1") {
       return res.download(filePath, submission.fileName || path.basename(filePath));
+    }
+    res.setHeader("Content-Disposition", "inline");
+    return res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Preview / download an assignment's attachment file
+// @route  GET /api/assignments/:id/attachments/:index/file
+// @access Private (any authenticated user who can see the assignment)
+export const downloadAssignmentFile = async (req, res) => {
+  try {
+    const { id, index } = req.params;
+    const assignment = await Assignment.findById(id);
+    if (!assignment) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Assignment not found" });
+    }
+
+    const attachment = assignment.attachments?.[parseInt(index)];
+    if (!attachment) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Attachment not found" });
+    }
+
+    const filePath = resolveAttachmentFilePath(attachment);
+    if (!filePath) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "The attachment file is no longer available on the server. The lecturer may need to re-upload it.",
+      });
+    }
+
+    if (req.query.download === "1") {
+      return res.download(
+        filePath,
+        attachment.fileName || path.basename(filePath),
+      );
     }
     res.setHeader("Content-Disposition", "inline");
     return res.sendFile(path.resolve(filePath));

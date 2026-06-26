@@ -629,13 +629,22 @@ export default function LecturerAssignmentsPage() {
                 <Select
                   value={formData.faculty}
                   onValueChange={(value) =>
-                    setFormData({ ...formData, faculty: value, program: "" })
+                    setFormData({
+                      ...formData,
+                      faculty: value,
+                      // "General" faculty (all faculties) auto-targets all
+                      // programs; otherwise reset the program choice.
+                      program: value === "General" ? "General" : "",
+                    })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select faculty" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="General">
+                      General (All Faculties)
+                    </SelectItem>
                     {FACULTY_NAMES.map((faculty) => (
                       <SelectItem key={faculty} value={faculty}>
                         {faculty}
@@ -647,8 +656,18 @@ export default function LecturerAssignmentsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="program">Program *</Label>
-                {formData.faculty &&
-                FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                {formData.faculty === "General" ? (
+                  <Select value="General" disabled>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Programs" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="General">All Programs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : formData.faculty &&
+                  FACULTY_PROGRAMS[formData.faculty]?.length > 0 ? (
+                  <>
                   <Select
                     value={formData.program}
                     onValueChange={(value) =>
@@ -659,6 +678,9 @@ export default function LecturerAssignmentsPage() {
                       <SelectValue placeholder="Select program" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="General">
+                        General (All Programs)
+                      </SelectItem>
                       {FACULTY_PROGRAMS[formData.faculty].map((program) => (
                         <SelectItem key={program} value={program}>
                           {program}
@@ -666,6 +688,7 @@ export default function LecturerAssignmentsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  </>
                 ) : (
                   <Input
                     id="program"
@@ -697,6 +720,7 @@ export default function LecturerAssignmentsPage() {
                     <SelectValue placeholder="Select year" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="0">All Levels / Years</SelectItem>
                     <SelectItem value="1">Year 1</SelectItem>
                     <SelectItem value="2">Year 2</SelectItem>
                     <SelectItem value="3">Year 3</SelectItem>

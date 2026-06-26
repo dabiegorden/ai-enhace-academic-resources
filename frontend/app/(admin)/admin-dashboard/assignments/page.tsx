@@ -32,6 +32,7 @@ import {
   Eye,
   Upload,
   X,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FACULTY_NAMES, FACULTY_PROGRAMS } from "@/constants/faculties";
@@ -298,6 +299,65 @@ export default function AdminAssignmentsPage() {
   const openViewDialog = (assignment: Assignment) => {
     setSelectedAssignment(assignment);
     setViewDialogOpen(true);
+  };
+
+  // Fetch an attachment (auth-protected) and open it inline for preview.
+  const previewAttachment = async (index: number) => {
+    if (!selectedAssignment) return;
+    try {
+      const response = await fetch(
+        `${apiUrl}/assignments/${selectedAssignment._id}/attachments/${index}/file`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) {
+        let msg = "File not available";
+        try {
+          const d = await response.json();
+          msg = d.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to preview file",
+      );
+    }
+  };
+
+  // Fetch an attachment (auth-protected) and trigger a download.
+  const downloadAttachment = async (index: number, fileName: string) => {
+    if (!selectedAssignment) return;
+    try {
+      const response = await fetch(
+        `${apiUrl}/assignments/${selectedAssignment._id}/attachments/${index}/file?download=1`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) {
+        let msg = "File not available";
+        try {
+          const d = await response.json();
+          msg = d.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName || "attachment";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to download file",
+      );
+    }
   };
 
   const getStatusBadge = (assignment: Assignment) => {
@@ -760,10 +820,34 @@ export default function AdminAssignmentsPage() {
                     {selectedAssignment.attachments.map((file, index) => (
                       <div
                         key={index}
-                        className="flex items-center gap-2 p-2 bg-muted rounded"
+                        className="flex items-center justify-between gap-2 p-2 bg-muted rounded"
                       >
-                        <FileText className="size-4" />
-                        <span className="text-sm">{file.fileName}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="size-4 shrink-0" />
+                          <span className="text-sm truncate">
+                            {file.fileName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => previewAttachment(index)}
+                          >
+                            <Eye className="size-4 mr-1" />
+                            Preview
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              downloadAttachment(index, file.fileName)
+                            }
+                          >
+                            <Download className="size-4 mr-1" />
+                            Download
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -88,6 +88,7 @@ const StudentsAssignments = () => {
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [editingSubmission, setEditingSubmission] = useState(false);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const token =
@@ -229,6 +230,107 @@ const StudentsAssignments = () => {
       console.error("Submit error:", error);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Update (replace) an existing submission
+  const handleUpdateSubmission = async () => {
+    if (!selectedFile || !selectedAssignment) {
+      toast.error("Please select a file");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      const response = await fetch(
+        `${apiUrl}/assignments/${selectedAssignment._id}/submit`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        },
+      );
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Submission updated successfully");
+        setSubmitDialogOpen(false);
+        setSelectedFile(null);
+        setEditingSubmission(false);
+        fetchAssignments();
+      } else {
+        toast.error(data.message || "Failed to update submission");
+      }
+    } catch (error) {
+      toast.error("Failed to update submission");
+      console.error("Update error:", error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Delete an existing submission
+  const handleDeleteSubmission = async (assignment: Assignment) => {
+    if (!confirm("Are you sure you want to delete your submission?")) return;
+    try {
+      const response = await fetch(
+        `${apiUrl}/assignments/${assignment._id}/submit`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Submission deleted");
+        setViewDialogOpen(false);
+        fetchAssignments();
+      } else {
+        toast.error(data.message || "Failed to delete submission");
+      }
+    } catch (error) {
+      toast.error("Failed to delete submission");
+      console.error("Delete error:", error);
+    }
+  };
+
+  // Fetch a protected file (assignment attachment or own submission) and either
+  // open it inline (preview) or trigger a download.
+  const openProtectedFile = async (
+    endpoint: string,
+    opts: { download?: boolean; fileName?: string } = {},
+  ) => {
+    try {
+      const url = `${apiUrl}${endpoint}${opts.download ? "?download=1" : ""}`;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        let msg = "File not available";
+        try {
+          const d = await response.json();
+          msg = d.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const blob = await response.blob();
+      const objUrl = window.URL.createObjectURL(blob);
+      if (opts.download) {
+        const a = document.createElement("a");
+        a.href = objUrl;
+        a.download = opts.fileName || "file";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(objUrl);
+      } else {
+        window.open(objUrl, "_blank", "noopener,noreferrer");
+        setTimeout(() => window.URL.revokeObjectURL(objUrl), 60000);
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to open file",
+      );
     }
   };
 
@@ -526,9 +628,9 @@ const StudentsAssignments = () => {
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              window.open(
-                                `${process.env.NEXT_PUBLIC_API_URL}${file.url}`,
-                                "_blank",
+                              openProtectedFile(
+                                `/assignments/${selectedAssignment?._id}/attachments/${idx}/file`,
+                                { download: true, fileName: file.fileName },
                               )
                             }
                           >
@@ -586,19 +688,61 @@ const StudentsAssignments = () => {
                               )}
                             </div>
                           )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              window.open(
-                                `${process.env.NEXT_PUBLIC_API_URL}${submission?.fileUrl}`,
-                                "_blank",
-                              )
-                            }
-                          >
-                            <Download className="size-4 mr-2" />
-                            Download Submission
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                submission &&
+                                openProtectedFile(
+                                  `/assignments/${selectedAssignment._id}/submissions/${submission._id}/file`,
+                                )
+                              }
+                            >
+                              <FileText className="size-4 mr-2" />
+                              Preview
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                submission &&
+                                openProtectedFile(
+                                  `/assignments/${selectedAssignment._id}/submissions/${submission._id}/file`,
+                                  { download: true, fileName: submission.fileName },
+                                )
+                              }
+                            >
+                              <Download className="size-4 mr-2" />
+                              Download
+                            </Button>
+                            {submission?.status !== "graded" && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedFile(null);
+                                    setEditingSubmission(true);
+                                    setViewDialogOpen(false);
+                                    setSubmitDialogOpen(true);
+                                  }}
+                                >
+                                  <Upload className="size-4 mr-2" />
+                                  Update
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleDeleteSubmission(selectedAssignment)
+                                  }
+                                >
+                                  Delete
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       );
                     })()}
@@ -617,10 +761,18 @@ const StudentsAssignments = () => {
         </Dialog>
 
         {/* Submit Assignment Dialog */}
-        <Dialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
+        <Dialog
+          open={submitDialogOpen}
+          onOpenChange={(open) => {
+            setSubmitDialogOpen(open);
+            if (!open) setEditingSubmission(false);
+          }}
+        >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Submit Assignment</DialogTitle>
+              <DialogTitle>
+                {editingSubmission ? "Update Submission" : "Submit Assignment"}
+              </DialogTitle>
               <DialogDescription>{selectedAssignment?.title}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -661,15 +813,22 @@ const StudentsAssignments = () => {
                 onClick={() => {
                   setSubmitDialogOpen(false);
                   setSelectedFile(null);
+                  setEditingSubmission(false);
                 }}
               >
                 Cancel
               </Button>
               <Button
-                onClick={handleSubmit}
+                onClick={editingSubmission ? handleUpdateSubmission : handleSubmit}
                 disabled={!selectedFile || submitting}
               >
-                {submitting ? "Submitting..." : "Submit Assignment"}
+                {submitting
+                  ? editingSubmission
+                    ? "Updating..."
+                    : "Submitting..."
+                  : editingSubmission
+                    ? "Update Submission"
+                    : "Submit Assignment"}
               </Button>
             </DialogFooter>
           </DialogContent>

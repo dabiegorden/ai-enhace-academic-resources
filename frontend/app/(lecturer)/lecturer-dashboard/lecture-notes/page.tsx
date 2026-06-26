@@ -634,7 +634,7 @@ const LecturerNotesPage = () => {
                   <SelectContent>
                     {/* General = course offered to the WHOLE SCHOOL */}
                     <SelectItem value="General">
-                      General (Whole School)
+                      General (All Faculties)
                     </SelectItem>
                     {faculties.map((faculty) => (
                       <SelectItem key={faculty} value={faculty}>
@@ -664,13 +664,13 @@ const LecturerNotesPage = () => {
                         every program across all faculties. */}
                     {formData.faculty === "General" && (
                       <SelectItem value="General">
-                        General (All Programs)
+                        General (All Programmes)
                       </SelectItem>
                     )}
                     {/* General = course offered to the WHOLE FACULTY */}
                     {formData.faculty && formData.faculty !== "General" && (
                       <SelectItem value="General">
-                        General (Whole Faculty)
+                        General (All Programmes in Faculty)
                       </SelectItem>
                     )}
                     {formData.faculty &&
@@ -701,6 +701,7 @@ const LecturerNotesPage = () => {
                     <SelectValue placeholder="Select year" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="0">All Years / Levels</SelectItem>
                     {[1, 2, 3, 4, 5].map((year) => (
                       <SelectItem key={year} value={year.toString()}>
                         Year {year}
@@ -875,7 +876,7 @@ const LecturerNotesPage = () => {
                   <SelectContent>
                     {/* General = course offered to the WHOLE SCHOOL */}
                     <SelectItem value="General">
-                      General (Whole School)
+                      General (All Faculties)
                     </SelectItem>
                     {faculties.map((faculty) => (
                       <SelectItem key={faculty} value={faculty}>
@@ -903,12 +904,12 @@ const LecturerNotesPage = () => {
                   <SelectContent>
                     {formData.faculty === "General" && (
                       <SelectItem value="General">
-                        General (All Programs)
+                        General (All Programmes)
                       </SelectItem>
                     )}
                     {formData.faculty && formData.faculty !== "General" && (
                       <SelectItem value="General">
-                        General (Whole Faculty)
+                        General (All Programmes in Faculty)
                       </SelectItem>
                     )}
                     {formData.faculty &&

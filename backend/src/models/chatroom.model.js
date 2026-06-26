@@ -50,6 +50,12 @@ const chatRoomSchema = new mongoose.Schema(
         return this.type === "program";
       },
     },
+    // Target year/level. 0 means "All years" (open to every level). When set to
+    // a specific year, only students of that year (plus staff) may join/see it.
+    targetYear: {
+      type: Number,
+      default: 0,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

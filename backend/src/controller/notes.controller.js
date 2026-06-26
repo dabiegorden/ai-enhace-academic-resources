@@ -40,9 +40,15 @@ const getFileExtension = (filename) =>
 //   • program === "General"  → course offered to the WHOLE FACULTY (all programs)
 // Otherwise the note is specific to a faculty + program + year of study.
 const studentCanSeeNote = (note, user) => {
-  if (note.faculty === "General") return true; // whole school
+  // A note for a specific year is hidden from students in other years.
+  // yearOfStudy 0 means "All years/levels".
+  const yearOk =
+    !note.yearOfStudy ||
+    note.yearOfStudy === 0 ||
+    note.yearOfStudy === user.yearOfStudy;
+  if (note.faculty === "General") return yearOk; // all faculties, chosen year
   if (note.faculty !== user.faculty) return false;
-  if (note.program === "General") return true; // whole faculty
+  if (note.program === "General") return yearOk; // whole faculty, chosen year
   return (
     note.program === user.program && note.yearOfStudy === user.yearOfStudy
   );
@@ -527,9 +533,12 @@ export const getMyLectureNotes = async (req, res) => {
 
     // Visibility: own program/year notes, whole-faculty ("General" program)
     // notes, and whole-school ("General" faculty) notes.
+    // "General" (all faculties) and whole-faculty ("General" program) notes are
+    // still restricted to the year the lecturer chose (0 = all years/levels).
+    const yearOr = [{ yearOfStudy: 0 }, { yearOfStudy: req.user.yearOfStudy }];
     const visibilityOr = [
-      { faculty: "General" },
-      { faculty: req.user.faculty, program: "General" },
+      { faculty: "General", $or: yearOr },
+      { faculty: req.user.faculty, program: "General", $or: yearOr },
       {
         faculty: req.user.faculty,
         program: req.user.program,

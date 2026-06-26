@@ -263,6 +263,8 @@ const LecturerStudentPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [facultyFilter, setFacultyFilter] = useState<string>("all");
+  const [yearFilter, setYearFilter] = useState<string>("all");
+  const [programFilter, setProgramFilter] = useState<string>("all");
 
   // Only ONE modal: view
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -289,7 +291,7 @@ const LecturerStudentPage = () => {
       const data = await response.json();
       const list = data.data || data;
       setStudents(list);
-      applyFilters(list, searchTerm, facultyFilter);
+      applyFilters(list, searchTerm, facultyFilter, yearFilter, programFilter);
     } catch {
       toast.error("Failed to load students");
     } finally {
@@ -297,7 +299,13 @@ const LecturerStudentPage = () => {
     }
   };
 
-  const applyFilters = (list: Student[], search: string, faculty: string) => {
+  const applyFilters = (
+    list: Student[],
+    search: string,
+    faculty: string,
+    year: string,
+    program: string,
+  ) => {
     let filtered = list;
     if (search) {
       const s = search.toLowerCase();
@@ -312,19 +320,46 @@ const LecturerStudentPage = () => {
     }
     if (faculty !== "all")
       filtered = filtered.filter((st) => st.faculty === faculty);
+    if (year !== "all")
+      filtered = filtered.filter((st) => String(st.yearOfStudy) === year);
+    if (program !== "all")
+      filtered = filtered.filter((st) => st.program === program);
     setFilteredStudents(filtered);
   };
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
-    applyFilters(students, value, facultyFilter);
+    applyFilters(students, value, facultyFilter, yearFilter, programFilter);
   };
 
   const handleFacultyFilter = (value: string) => {
     setFacultyFilter(value);
-    applyFilters(students, searchTerm, value);
+    applyFilters(students, searchTerm, value, yearFilter, programFilter);
   };
+
+  const handleYearFilter = (value: string) => {
+    setYearFilter(value);
+    applyFilters(students, searchTerm, facultyFilter, value, programFilter);
+  };
+
+  const handleProgramFilter = (value: string) => {
+    setProgramFilter(value);
+    applyFilters(students, searchTerm, facultyFilter, yearFilter, value);
+  };
+
+  // Unique program list derived from the loaded students, optionally scoped to
+  // the selected faculty — powers the Program sorting dropdown.
+  const programOptions = Array.from(
+    new Set(
+      students
+        .filter(
+          (st) => facultyFilter === "all" || st.faculty === facultyFilter,
+        )
+        .map((st) => st.program)
+        .filter(Boolean),
+    ),
+  ).sort();
 
   // -------------------------------------------------------------------------
   // Open view modal — blur background first
@@ -417,7 +452,7 @@ const LecturerStudentPage = () => {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 220px",
+            gridTemplateColumns: "1fr 220px 160px 200px",
             gap: "12px",
             marginBottom: "20px",
           }}
@@ -438,6 +473,32 @@ const LecturerStudentPage = () => {
               {FACULTIES.map((f) => (
                 <SelectItem key={f} value={f}>
                   {f}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={yearFilter} onValueChange={handleYearFilter}>
+            <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+              <SelectValue placeholder="Filter by year" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectItem value="all">All Years</SelectItem>
+              <SelectItem value="1">Year 1</SelectItem>
+              <SelectItem value="2">Year 2</SelectItem>
+              <SelectItem value="3">Year 3</SelectItem>
+              <SelectItem value="4">Year 4</SelectItem>
+              <SelectItem value="5">Year 5</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={programFilter} onValueChange={handleProgramFilter}>
+            <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+              <SelectValue placeholder="Filter by program" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectItem value="all">All Programs</SelectItem>
+              {programOptions.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
                 </SelectItem>
               ))}
             </SelectContent>

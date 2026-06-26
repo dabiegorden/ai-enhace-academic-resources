@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Eye, Edit, Trash2, BookOpen, Download } from "lucide-react";
+import { Eye, Edit, Trash2, BookOpen, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import {
   FACULTY_NAMES as FACULTIES,
@@ -257,6 +257,28 @@ const AdminLectureNotesPage = () => {
     }
   };
 
+  const handlePreview = async (note: LectureNote) => {
+    // Cloudinary-hosted notes can be opened directly.
+    if (note.fileUrl) {
+      window.open(note.fileUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    // Legacy local-disk notes — stream via the preview endpoint.
+    try {
+      const response = await fetch(`${apiUrl}/notes/${note._id}/preview`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok)
+        throw new Error(`File not accessible: ${response.status}`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (error) {
+      console.error("Preview error:", error);
+      toast.error("Failed to preview file. The file may not exist.");
+    }
+  };
+
   const handleDownload = async (note: LectureNote) => {
     try {
       const response = await fetch(`${apiUrl}/notes/${note._id}/download`, {
@@ -413,9 +435,19 @@ const AdminLectureNotesPage = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleViewNote(note)}
+                          title="View details"
                           className="text-blue-400 hover:text-blue-300 hover:bg-gray-700"
                         >
                           <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handlePreview(note)}
+                          title="Preview file"
+                          className="text-purple-400 hover:text-purple-300 hover:bg-gray-700"
+                        >
+                          <FileText className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -549,6 +581,24 @@ const AdminLectureNotesPage = () => {
               </div>
             )}
             <DialogFooter>
+              {selectedNote && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => handlePreview(selectedNote)}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Preview File
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDownload(selectedNote)}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download
+                  </Button>
+                </>
+              )}
               <Button
                 variant="ghost"
                 onClick={() => setViewDialogOpen(false)}
@@ -669,7 +719,7 @@ const AdminLectureNotesPage = () => {
                   <SelectContent className="bg-gray-700 border-gray-600">
                     {/* General = course offered to the WHOLE SCHOOL */}
                     <SelectItem value="General">
-                      General (Whole School)
+                      General (All Faculties)
                     </SelectItem>
                     {FACULTIES.map((faculty) => (
                       <SelectItem key={faculty} value={faculty}>
@@ -698,7 +748,7 @@ const AdminLectureNotesPage = () => {
                     <SelectContent className="bg-gray-700 border-gray-600">
                       {/* General = course offered to the WHOLE FACULTY */}
                       <SelectItem value="General">
-                        General (Whole Faculty)
+                        General (All Programmes in Faculty)
                       </SelectItem>
                       {FACULTY_PROGRAMS[formData.faculty].map((program) => (
                         <SelectItem key={program} value={program}>
@@ -735,6 +785,7 @@ const AdminLectureNotesPage = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-700 border-gray-600">
+                    <SelectItem value="0">All Years / Levels</SelectItem>
                     <SelectItem value="1">Year 1</SelectItem>
                     <SelectItem value="2">Year 2</SelectItem>
                     <SelectItem value="3">Year 3</SelectItem>
