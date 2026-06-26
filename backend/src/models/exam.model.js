@@ -104,6 +104,27 @@ const examSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Course/subject the exam is for. Scopes the exam to students taking it.
+    course: {
+      type: String,
+      default: null,
+    },
+    // Academic level the exam targets: "100"–"400". A null value means the
+    // exam is open to every level within the faculty.
+    level: {
+      type: String,
+      enum: ["100", "200", "300", "400", null],
+      default: null,
+    },
+    // Scheduled date and time of the examination (when it takes place).
+    examDate: {
+      type: Date,
+      default: null,
+    },
+    examTime: {
+      type: String,
+      default: null,
+    },
     questions: [questionSchema],
     durationInMinutes: {
       type: Number,

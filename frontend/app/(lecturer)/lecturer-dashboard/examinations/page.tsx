@@ -60,6 +60,11 @@ interface Exam {
   _id: string;
   title: string;
   durationInMinutes: number;
+  course?: string | null;
+  level?: string | null;
+  examDate?: string | null;
+  examTime?: string | null;
+  faculty?: string | null;
   questions: Question[];
   status: "draft" | "active" | "ended";
   startedAt?: string;
@@ -90,6 +95,10 @@ export default function LecturerExaminationsPage() {
   // Form states
   const [examTitle, setExamTitle] = useState("");
   const [durationInMinutes, setDurationInMinutes] = useState("");
+  const [examCourse, setExamCourse] = useState("");
+  const [examLevel, setExamLevel] = useState("");
+  const [examDate, setExamDate] = useState("");
+  const [examTime, setExamTime] = useState("");
 
   // Question form states
   const [questionType, setQuestionType] = useState<"mcq" | "theory">("mcq");
@@ -131,6 +140,15 @@ export default function LecturerExaminationsPage() {
     }
   };
 
+  const resetExamForm = () => {
+    setExamTitle("");
+    setDurationInMinutes("");
+    setExamCourse("");
+    setExamLevel("");
+    setExamDate("");
+    setExamTime("");
+  };
+
   const handleCreateExam = async () => {
     if (!examTitle || !durationInMinutes) {
       toast.error("Please fill all fields");
@@ -149,6 +167,10 @@ export default function LecturerExaminationsPage() {
         body: JSON.stringify({
           title: examTitle,
           durationInMinutes: Number.parseInt(durationInMinutes),
+          course: examCourse || null,
+          level: examLevel || null,
+          examDate: examDate || null,
+          examTime: examTime || null,
         }),
       });
 
@@ -160,8 +182,7 @@ export default function LecturerExaminationsPage() {
 
       toast.success("Exam created successfully");
       setAddDialogOpen(false);
-      setExamTitle("");
-      setDurationInMinutes("");
+      resetExamForm();
       fetchExams();
     } catch (error) {
       console.error("Error creating exam:", error);
@@ -177,6 +198,14 @@ export default function LecturerExaminationsPage() {
     setSelectedExam(exam);
     setExamTitle(exam.title);
     setDurationInMinutes(exam.durationInMinutes.toString());
+    setExamCourse((exam as any).course || "");
+    setExamLevel((exam as any).level || "");
+    setExamDate(
+      (exam as any).examDate
+        ? new Date((exam as any).examDate).toISOString().split("T")[0]
+        : "",
+    );
+    setExamTime((exam as any).examTime || "");
     setEditDialogOpen(true);
   };
 
@@ -200,6 +229,10 @@ export default function LecturerExaminationsPage() {
         body: JSON.stringify({
           title: examTitle,
           durationInMinutes: Number.parseInt(durationInMinutes),
+          course: examCourse || null,
+          level: examLevel || null,
+          examDate: examDate || null,
+          examTime: examTime || null,
         }),
       });
 
@@ -212,8 +245,7 @@ export default function LecturerExaminationsPage() {
       toast.success("Exam updated successfully");
       setEditDialogOpen(false);
       setSelectedExam(null);
-      setExamTitle("");
-      setDurationInMinutes("");
+      resetExamForm();
       fetchExams();
     } catch (error) {
       console.error("Error updating exam:", error);
@@ -557,6 +589,26 @@ export default function LecturerExaminationsPage() {
                   <Clock className="size-4 text-muted-foreground" />
                   <span>{exam?.durationInMinutes} minutes</span>
                 </div>
+                {exam?.course && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileText className="size-4 text-muted-foreground" />
+                    <span>
+                      {exam.course}
+                      {exam.level ? ` • Level ${exam.level}` : ""}
+                    </span>
+                  </div>
+                )}
+                {(exam?.examDate || exam?.examTime) && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="size-4 text-muted-foreground" />
+                    <span>
+                      {exam.examDate
+                        ? new Date(exam.examDate).toLocaleDateString()
+                        : ""}
+                      {exam.examTime ? ` at ${exam.examTime}` : ""}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-sm">
                   <FileText className="size-4 text-muted-foreground" />
                   <span>
@@ -710,6 +762,49 @@ export default function LecturerExaminationsPage() {
                 onChange={(e) => setDurationInMinutes(e.target.value)}
               />
             </div>
+            <div>
+              <Label htmlFor="course">Course</Label>
+              <Input
+                id="course"
+                placeholder="e.g., Introduction to Programming"
+                value={examCourse}
+                onChange={(e) => setExamCourse(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="level">Level</Label>
+              <Select value={examLevel} onValueChange={setExamLevel}>
+                <SelectTrigger id="level">
+                  <SelectValue placeholder="Select level (all levels if empty)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="100">Level 100</SelectItem>
+                  <SelectItem value="200">Level 200</SelectItem>
+                  <SelectItem value="300">Level 300</SelectItem>
+                  <SelectItem value="400">Level 400</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="examDate">Exam Date</Label>
+                <Input
+                  id="examDate"
+                  type="date"
+                  value={examDate}
+                  onChange={(e) => setExamDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="examTime">Exam Time</Label>
+                <Input
+                  id="examTime"
+                  type="time"
+                  value={examTime}
+                  onChange={(e) => setExamTime(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -756,14 +851,56 @@ export default function LecturerExaminationsPage() {
                 onChange={(e) => setDurationInMinutes(e.target.value)}
               />
             </div>
+            <div>
+              <Label htmlFor="edit-course">Course</Label>
+              <Input
+                id="edit-course"
+                placeholder="e.g., Introduction to Programming"
+                value={examCourse}
+                onChange={(e) => setExamCourse(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-level">Level</Label>
+              <Select value={examLevel} onValueChange={setExamLevel}>
+                <SelectTrigger id="edit-level">
+                  <SelectValue placeholder="Select level (all levels if empty)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="100">Level 100</SelectItem>
+                  <SelectItem value="200">Level 200</SelectItem>
+                  <SelectItem value="300">Level 300</SelectItem>
+                  <SelectItem value="400">Level 400</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-examDate">Exam Date</Label>
+                <Input
+                  id="edit-examDate"
+                  type="date"
+                  value={examDate}
+                  onChange={(e) => setExamDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-examTime">Exam Time</Label>
+                <Input
+                  id="edit-examTime"
+                  type="time"
+                  value={examTime}
+                  onChange={(e) => setExamTime(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
                 setEditDialogOpen(false);
-                setExamTitle("");
-                setDurationInMinutes("");
+                resetExamForm();
               }}
               disabled={actionLoading}
             >

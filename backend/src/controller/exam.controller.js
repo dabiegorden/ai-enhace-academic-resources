@@ -4,7 +4,8 @@ import { broadcastToRoles } from "../controller/notification.controller.js";
 // Create a new exam (draft)
 export const createExam = async (req, res) => {
   try {
-    const { title, durationInMinutes } = req.body;
+    const { title, durationInMinutes, course, level, examDate, examTime } =
+      req.body;
 
     if (!title || !durationInMinutes) {
       return res.status(400).json({
@@ -26,6 +27,11 @@ export const createExam = async (req, res) => {
       durationInMinutes: Number.parseInt(durationInMinutes),
       createdBy: req.user.id,
       faculty,
+      // Scope to a course and level so only the right students see it.
+      course: course || null,
+      level: level || null,
+      examDate: examDate || null,
+      examTime: examTime || null,
       questions: [],
       status: "draft",
     });
@@ -57,11 +63,27 @@ export const getAllExams = async (req, res) => {
       query.createdBy = req.user.id;
     } else if (req.user.role === "student") {
       query.status = { $in: ["active", "ended"] };
-      // Faculty-scoped: own faculty OR a school-wide exam (null / "General")
-      query.$or = [
-        { faculty: req.user.faculty },
-        { faculty: null },
-        { faculty: "General" },
+      // Derive the student's academic level (100/200/300/400) from their year.
+      const studentLevel = req.user.yearOfStudy
+        ? String(req.user.yearOfStudy * 100)
+        : null;
+      // Faculty-scoped: own faculty OR a school-wide exam (null / "General"),
+      // AND level-scoped: matching level OR a level-agnostic exam (null).
+      query.$and = [
+        {
+          $or: [
+            { faculty: req.user.faculty },
+            { faculty: null },
+            { faculty: "General" },
+          ],
+        },
+        {
+          $or: [
+            { level: studentLevel },
+            { level: null },
+            { level: { $exists: false } },
+          ],
+        },
       ];
     }
 
@@ -461,6 +483,18 @@ export const getExamForStudent = async (req, res) => {
       });
     }
 
+    // Level eligibility — a level-specific exam is only for students of that
+    // level (a null level means it's open to all levels).
+    const studentLevel = req.user.yearOfStudy
+      ? String(req.user.yearOfStudy * 100)
+      : null;
+    if (exam.level && exam.level !== studentLevel) {
+      return res.status(403).json({
+        success: false,
+        message: "This exam is not available for your level",
+      });
+    }
+
     // Block re-taking after a submission
     const alreadySubmitted = exam.submissions.some(
       (sub) => sub.studentId.toString() === req.user.id,
@@ -527,12 +561,26 @@ export const getExamForStudent = async (req, res) => {
 // Get my exams (for students) — faculty-scoped
 export const getMyExams = async (req, res) => {
   try {
+    const studentLevel = req.user.yearOfStudy
+      ? String(req.user.yearOfStudy * 100)
+      : null;
     const exams = await Exam.find({
       status: "active",
-      $or: [
-        { faculty: req.user.faculty },
-        { faculty: null },
-        { faculty: "General" },
+      $and: [
+        {
+          $or: [
+            { faculty: req.user.faculty },
+            { faculty: null },
+            { faculty: "General" },
+          ],
+        },
+        {
+          $or: [
+            { level: studentLevel },
+            { level: null },
+            { level: { $exists: false } },
+          ],
+        },
       ],
     })
       .select("-questions.correctAnswer")
@@ -719,10 +767,15 @@ export const updateExam = async (req, res) => {
       });
     }
 
-    const { title, durationInMinutes } = req.body;
+    const { title, durationInMinutes, course, level, examDate, examTime } =
+      req.body;
 
     if (title) exam.title = title;
     if (durationInMinutes) exam.durationInMinutes = durationInMinutes;
+    if (course !== undefined) exam.course = course || null;
+    if (level !== undefined) exam.level = level || null;
+    if (examDate !== undefined) exam.examDate = examDate || null;
+    if (examTime !== undefined) exam.examTime = examTime || null;
 
     await exam.save();
 

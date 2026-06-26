@@ -39,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FACULTY_NAMES as FACULTIES } from "@/constants/faculties";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface Question {
@@ -59,6 +60,11 @@ interface Exam {
   _id: string;
   title: string;
   durationInMinutes: number;
+  faculty?: string | null;
+  course?: string | null;
+  level?: string | null;
+  examDate?: string | null;
+  examTime?: string | null;
   questions: Question[];
   status: "draft" | "active" | "ended";
   startedAt?: string;
@@ -88,6 +94,11 @@ export default function AdminExaminationsPage() {
   // Form states
   const [examTitle, setExamTitle] = useState("");
   const [durationInMinutes, setDurationInMinutes] = useState("");
+  const [examFaculty, setExamFaculty] = useState("");
+  const [examCourse, setExamCourse] = useState("");
+  const [examLevel, setExamLevel] = useState("");
+  const [examDate, setExamDate] = useState("");
+  const [examTime, setExamTime] = useState("");
 
   // Question form states
   const [questionType, setQuestionType] = useState<"mcq" | "theory">("mcq");
@@ -147,6 +158,11 @@ export default function AdminExaminationsPage() {
         body: JSON.stringify({
           title: examTitle,
           durationInMinutes: Number.parseInt(durationInMinutes),
+          faculty: examFaculty || null,
+          course: examCourse || null,
+          level: examLevel || null,
+          examDate: examDate || null,
+          examTime: examTime || null,
         }),
       });
 
@@ -160,6 +176,11 @@ export default function AdminExaminationsPage() {
       setAddDialogOpen(false);
       setExamTitle("");
       setDurationInMinutes("");
+      setExamFaculty("");
+      setExamCourse("");
+      setExamLevel("");
+      setExamDate("");
+      setExamTime("");
       fetchExams();
     } catch (error) {
       console.error("Error creating exam:", error);
@@ -497,6 +518,27 @@ export default function AdminExaminationsPage() {
                   <Clock className="size-4 text-muted-foreground" />
                   <span>{exam.durationInMinutes} minutes</span>
                 </div>
+                {(exam.course || exam.faculty || exam.level) && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileText className="size-4 text-muted-foreground" />
+                    <span>
+                      {[exam.course, exam.level ? `Level ${exam.level}` : null, exam.faculty]
+                        .filter(Boolean)
+                        .join(" • ")}
+                    </span>
+                  </div>
+                )}
+                {(exam.examDate || exam.examTime) && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="size-4 text-muted-foreground" />
+                    <span>
+                      {exam.examDate
+                        ? new Date(exam.examDate).toLocaleDateString()
+                        : ""}
+                      {exam.examTime ? ` at ${exam.examTime}` : ""}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-sm">
                   <FileText className="size-4 text-muted-foreground" />
                   <span>
@@ -640,6 +682,64 @@ export default function AdminExaminationsPage() {
                 value={durationInMinutes}
                 onChange={(e) => setDurationInMinutes(e.target.value)}
               />
+            </div>
+            <div>
+              <Label htmlFor="faculty">Faculty</Label>
+              <Select value={examFaculty} onValueChange={setExamFaculty}>
+                <SelectTrigger id="faculty">
+                  <SelectValue placeholder="Select faculty (all faculties if empty)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FACULTIES.map((f) => (
+                    <SelectItem key={f} value={f}>
+                      {f}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="course">Course</Label>
+              <Input
+                id="course"
+                placeholder="e.g., Introduction to Programming"
+                value={examCourse}
+                onChange={(e) => setExamCourse(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="level">Level</Label>
+              <Select value={examLevel} onValueChange={setExamLevel}>
+                <SelectTrigger id="level">
+                  <SelectValue placeholder="Select level (all levels if empty)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="100">Level 100</SelectItem>
+                  <SelectItem value="200">Level 200</SelectItem>
+                  <SelectItem value="300">Level 300</SelectItem>
+                  <SelectItem value="400">Level 400</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="examDate">Exam Date</Label>
+                <Input
+                  id="examDate"
+                  type="date"
+                  value={examDate}
+                  onChange={(e) => setExamDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="examTime">Exam Time</Label>
+                <Input
+                  id="examTime"
+                  type="time"
+                  value={examTime}
+                  onChange={(e) => setExamTime(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
