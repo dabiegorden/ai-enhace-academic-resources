@@ -34,6 +34,7 @@ import {
   Lock,
   ThumbsUp,
   Users,
+  Vote,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -61,6 +62,7 @@ interface Candidate {
   image?: File;
   manifestoFile?: File;
   votes: number;
+  noVotes?: number;
 }
 
 interface YesNoTally {
@@ -514,35 +516,50 @@ export default function VotingAdmin() {
     }
   };
 
-  // ── CSV Download ───────────────────────────────────────────────────────────
-  const handleDownloadResults = (voting: Voting) => {
-    let rows: string[][];
-
+  // ── Total votes cast for an event (admins always receive the real tallies) ──
+  const totalVotesCast = (voting: Voting): number => {
     if (voting.votingMode === "yesno") {
-      rows = [["Position", "Yes Votes", "No Votes", "Outcome"]];
+      return voting.yesNoTallies.reduce(
+        (sum, t) => sum + (t.yes ?? 0) + (t.no ?? 0),
+        0,
+      );
+    }
+    return voting.candidates.reduce(
+      (sum, c) => sum + (c.votes ?? 0) + ((c as any).noVotes ?? 0),
+      0,
+    );
+  };
+
+  // Build the tabular result rows (header + data) shared by CSV/Excel exports.
+  const buildResultRows = (voting: Voting): string[][] => {
+    if (voting.votingMode === "yesno") {
+      const rows = [["Position", "Yes Votes", "No Votes", "Outcome"]];
       voting.yesNoTallies.forEach((t) => {
         const yes = t.yes ?? 0;
         const no = t.no ?? 0;
         const outcome = yes > no ? "APPROVED" : yes < no ? "REJECTED" : "TIE";
         rows.push([t.position, String(yes), String(no), outcome]);
       });
-    } else {
-      rows = [["Position", "Candidate Name", "Student ID", "Votes"]];
-      const byPosition: Record<string, Candidate[]> = {};
-      voting.candidates.forEach((c) => {
-        if (!byPosition[c.position]) byPosition[c.position] = [];
-        byPosition[c.position].push(c);
-      });
-      Object.entries(byPosition).forEach(([position, cands]) => {
-        const sorted = [...cands].sort(
-          (a, b) => (b.votes ?? 0) - (a.votes ?? 0),
-        );
-        sorted.forEach((c) =>
-          rows.push([position, c.name, c.studentId, String(c.votes ?? 0)]),
-        );
-      });
+      return rows;
     }
+    const rows = [["Position", "Candidate Name", "Student ID", "Votes"]];
+    const byPosition: Record<string, Candidate[]> = {};
+    voting.candidates.forEach((c) => {
+      if (!byPosition[c.position]) byPosition[c.position] = [];
+      byPosition[c.position].push(c);
+    });
+    Object.entries(byPosition).forEach(([position, cands]) => {
+      const sorted = [...cands].sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
+      sorted.forEach((c) =>
+        rows.push([position, c.name, c.studentId, String(c.votes ?? 0)]),
+      );
+    });
+    return rows;
+  };
 
+  // ── CSV Download ───────────────────────────────────────────────────────────
+  const handleDownloadResults = (voting: Voting) => {
+    const rows = buildResultRows(voting);
     const csv = rows
       .map((r) => r.map((cell) => `"${cell}"`).join(","))
       .join("\n");
@@ -551,6 +568,55 @@ export default function VotingAdmin() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `${voting.title.replace(/\s+/g, "_")}_results.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Excel Download ──────────────────────────────────────────────────────────
+  // Generates a real spreadsheet (.xls) Excel opens natively, without needing a
+  // third-party library, by emitting an HTML table workbook.
+  const handleDownloadExcel = (voting: Voting) => {
+    const rows = buildResultRows(voting);
+    const escapeHtml = (s: string) =>
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const headerRow = rows[0];
+    const bodyRows = rows.slice(1);
+    const total = totalVotesCast(voting);
+
+    const thead = `<tr>${headerRow
+      .map((c) => `<th style="background:#1f2937;color:#fff;">${escapeHtml(c)}</th>`)
+      .join("")}</tr>`;
+    const tbody = bodyRows
+      .map(
+        (r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`,
+      )
+      .join("");
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="UTF-8" /></head>
+        <body>
+          <table border="1">
+            <tr><td colspan="${headerRow.length}"><b>${escapeHtml(voting.title)}</b></td></tr>
+            <tr><td colspan="${headerRow.length}">Total votes cast: ${total}</td></tr>
+            <tr></tr>
+            ${thead}
+            ${tbody}
+          </table>
+        </body>
+      </html>`;
+
+    const blob = new Blob([html], {
+      type: "application/vnd.ms-excel;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${voting.title.replace(/\s+/g, "_")}_results.xls`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -736,22 +802,36 @@ export default function VotingAdmin() {
                             {voting.positions.length} position
                             {voting.positions.length !== 1 ? "s" : ""}
                           </span>
+                          {/* Total votes cast — visible to admins at all times */}
+                          <span className="flex items-center gap-1 bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-full font-medium">
+                            <Vote className="h-3 w-3" />
+                            {totalVotesCast(voting)} vote
+                            {totalVotesCast(voting) !== 1 ? "s" : ""}
+                          </span>
                         </div>
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {voting.resultsPublished && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDownloadResults(voting)}
-                        className="border-green-600 text-green-400 hover:bg-green-900/20"
-                        title="Download results as CSV"
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDownloadExcel(voting)}
+                      className="border-green-600 text-green-400 hover:bg-green-900/20"
+                      title="Download results as Excel"
+                    >
+                      <Download className="w-4 h-4 mr-1" />
+                      Excel
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDownloadResults(voting)}
+                      className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                      title="Download results as CSV"
+                    >
+                      CSV
+                    </Button>
                     {voting.resultsPublished ? (
                       <Button
                         size="sm"

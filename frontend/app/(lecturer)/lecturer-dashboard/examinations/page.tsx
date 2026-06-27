@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { FACULTY_NAMES, FACULTY_PROGRAMS } from "@/constants/faculties";
 
 interface Question {
   questionNumber: number;
@@ -95,6 +96,8 @@ export default function LecturerExaminationsPage() {
   // Form states
   const [examTitle, setExamTitle] = useState("");
   const [durationInMinutes, setDurationInMinutes] = useState("");
+  const [examFaculty, setExamFaculty] = useState("");
+  const [examProgram, setExamProgram] = useState("");
   const [examCourse, setExamCourse] = useState("");
   const [examLevel, setExamLevel] = useState("");
   const [examDate, setExamDate] = useState("");
@@ -143,6 +146,8 @@ export default function LecturerExaminationsPage() {
   const resetExamForm = () => {
     setExamTitle("");
     setDurationInMinutes("");
+    setExamFaculty("");
+    setExamProgram("");
     setExamCourse("");
     setExamLevel("");
     setExamDate("");
@@ -167,6 +172,8 @@ export default function LecturerExaminationsPage() {
         body: JSON.stringify({
           title: examTitle,
           durationInMinutes: Number.parseInt(durationInMinutes),
+          faculty: examFaculty || null,
+          program: examProgram || null,
           course: examCourse || null,
           level: examLevel || null,
           examDate: examDate || null,
@@ -198,6 +205,8 @@ export default function LecturerExaminationsPage() {
     setSelectedExam(exam);
     setExamTitle(exam.title);
     setDurationInMinutes(exam.durationInMinutes.toString());
+    setExamFaculty((exam as any).faculty || "");
+    setExamProgram((exam as any).program || "");
     setExamCourse((exam as any).course || "");
     setExamLevel((exam as any).level || "");
     setExamDate(
@@ -229,6 +238,8 @@ export default function LecturerExaminationsPage() {
         body: JSON.stringify({
           title: examTitle,
           durationInMinutes: Number.parseInt(durationInMinutes),
+          faculty: examFaculty || null,
+          program: examProgram || null,
           course: examCourse || null,
           level: examLevel || null,
           examDate: examDate || null,
@@ -265,6 +276,13 @@ export default function LecturerExaminationsPage() {
       return;
     }
 
+    // Points must be zero or above — no negative scoring allowed.
+    const pointsNum = Number.parseInt(points);
+    if (Number.isNaN(pointsNum) || pointsNum < 0) {
+      toast.error("Points must be zero or a positive number");
+      return;
+    }
+
     if (questionType === "mcq") {
       if (!optionA || !optionB || !optionC || !optionD || !correctAnswer) {
         toast.error("Please fill all MCQ options and select correct answer");
@@ -278,7 +296,7 @@ export default function LecturerExaminationsPage() {
       const payload: any = {
         questionType,
         questionText,
-        points: Number.parseInt(points),
+        points: pointsNum,
       };
 
       if (questionType === "mcq") {
@@ -762,6 +780,62 @@ export default function LecturerExaminationsPage() {
                 onChange={(e) => setDurationInMinutes(e.target.value)}
               />
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="faculty">Faculty</Label>
+                <Select
+                  value={examFaculty}
+                  onValueChange={(value) => {
+                    setExamFaculty(value);
+                    // Reset program when the faculty changes.
+                    setExamProgram(value === "General" ? "General" : "");
+                  }}
+                >
+                  <SelectTrigger id="faculty">
+                    <SelectValue placeholder="All faculties if empty" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="General">
+                      General (All Faculties)
+                    </SelectItem>
+                    {FACULTY_NAMES.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="program">Program</Label>
+                {examFaculty === "General" || !examFaculty ? (
+                  <Select value="General" disabled>
+                    <SelectTrigger id="program">
+                      <SelectValue placeholder="All Programs" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="General">All Programs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={examProgram} onValueChange={setExamProgram}>
+                    <SelectTrigger id="program">
+                      <SelectValue placeholder="Select program" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="General">
+                        General (All Programs)
+                      </SelectItem>
+                      {(FACULTY_PROGRAMS[examFaculty] || []).map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {p}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
             <div>
               <Label htmlFor="course">Course</Label>
               <Input
@@ -850,6 +924,61 @@ export default function LecturerExaminationsPage() {
                 value={durationInMinutes}
                 onChange={(e) => setDurationInMinutes(e.target.value)}
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-faculty">Faculty</Label>
+                <Select
+                  value={examFaculty}
+                  onValueChange={(value) => {
+                    setExamFaculty(value);
+                    setExamProgram(value === "General" ? "General" : "");
+                  }}
+                >
+                  <SelectTrigger id="edit-faculty">
+                    <SelectValue placeholder="All faculties if empty" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="General">
+                      General (All Faculties)
+                    </SelectItem>
+                    {FACULTY_NAMES.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-program">Program</Label>
+                {examFaculty === "General" || !examFaculty ? (
+                  <Select value="General" disabled>
+                    <SelectTrigger id="edit-program">
+                      <SelectValue placeholder="All Programs" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="General">All Programs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={examProgram} onValueChange={setExamProgram}>
+                    <SelectTrigger id="edit-program">
+                      <SelectValue placeholder="Select program" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="General">
+                        General (All Programs)
+                      </SelectItem>
+                      {(FACULTY_PROGRAMS[examFaculty] || []).map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {p}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </div>
             <div>
               <Label htmlFor="edit-course">Course</Label>
@@ -1020,6 +1149,7 @@ export default function LecturerExaminationsPage() {
               <Input
                 id="points"
                 type="number"
+                min={0}
                 placeholder="1"
                 value={points}
                 onChange={(e) => setPoints(e.target.value)}

@@ -39,7 +39,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FACULTY_NAMES as FACULTIES } from "@/constants/faculties";
+import {
+  FACULTY_NAMES as FACULTIES,
+  FACULTY_PROGRAMS,
+} from "@/constants/faculties";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface Question {
@@ -95,6 +98,7 @@ export default function AdminExaminationsPage() {
   const [examTitle, setExamTitle] = useState("");
   const [durationInMinutes, setDurationInMinutes] = useState("");
   const [examFaculty, setExamFaculty] = useState("");
+  const [examProgram, setExamProgram] = useState("");
   const [examCourse, setExamCourse] = useState("");
   const [examLevel, setExamLevel] = useState("");
   const [examDate, setExamDate] = useState("");
@@ -159,6 +163,7 @@ export default function AdminExaminationsPage() {
           title: examTitle,
           durationInMinutes: Number.parseInt(durationInMinutes),
           faculty: examFaculty || null,
+          program: examProgram || null,
           course: examCourse || null,
           level: examLevel || null,
           examDate: examDate || null,
@@ -177,6 +182,7 @@ export default function AdminExaminationsPage() {
       setExamTitle("");
       setDurationInMinutes("");
       setExamFaculty("");
+      setExamProgram("");
       setExamCourse("");
       setExamLevel("");
       setExamDate("");
@@ -200,6 +206,13 @@ export default function AdminExaminationsPage() {
       return;
     }
 
+    // Points must be zero or above — no negative scoring allowed.
+    const pointsNum = Number.parseInt(points);
+    if (Number.isNaN(pointsNum) || pointsNum < 0) {
+      toast.error("Points must be zero or a positive number");
+      return;
+    }
+
     if (questionType === "mcq") {
       if (!optionA || !optionB || !optionC || !optionD || !correctAnswer) {
         toast.error("Please fill all MCQ options and select correct answer");
@@ -213,7 +226,7 @@ export default function AdminExaminationsPage() {
       const payload: any = {
         questionType,
         questionText,
-        points: Number.parseInt(points),
+        points: pointsNum,
       };
 
       if (questionType === "mcq") {
@@ -683,20 +696,60 @@ export default function AdminExaminationsPage() {
                 onChange={(e) => setDurationInMinutes(e.target.value)}
               />
             </div>
-            <div>
-              <Label htmlFor="faculty">Faculty</Label>
-              <Select value={examFaculty} onValueChange={setExamFaculty}>
-                <SelectTrigger id="faculty">
-                  <SelectValue placeholder="Select faculty (all faculties if empty)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {FACULTIES.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {f}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="faculty">Faculty</Label>
+                <Select
+                  value={examFaculty}
+                  onValueChange={(value) => {
+                    setExamFaculty(value);
+                    setExamProgram(value === "General" ? "General" : "");
+                  }}
+                >
+                  <SelectTrigger id="faculty">
+                    <SelectValue placeholder="All faculties if empty" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="General">
+                      General (All Faculties)
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    {FACULTIES.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="program">Program</Label>
+                {examFaculty === "General" || !examFaculty ? (
+                  <Select value="General" disabled>
+                    <SelectTrigger id="program">
+                      <SelectValue placeholder="All Programs" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="General">All Programs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={examProgram} onValueChange={setExamProgram}>
+                    <SelectTrigger id="program">
+                      <SelectValue placeholder="Select program" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="General">
+                        General (All Programs)
+                      </SelectItem>
+                      {(FACULTY_PROGRAMS[examFaculty] || []).map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {p}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </div>
             <div>
               <Label htmlFor="course">Course</Label>
@@ -864,6 +917,7 @@ export default function AdminExaminationsPage() {
               <Input
                 id="points"
                 type="number"
+                min={0}
                 placeholder="1"
                 value={points}
                 onChange={(e) => setPoints(e.target.value)}

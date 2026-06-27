@@ -104,6 +104,12 @@ const examSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Program the exam targets (e.g. "Computer Science"). A null / "General"
+    // value means the exam is open to every program within the faculty.
+    program: {
+      type: String,
+      default: null,
+    },
     // Course/subject the exam is for. Scopes the exam to students taking it.
     course: {
       type: String,

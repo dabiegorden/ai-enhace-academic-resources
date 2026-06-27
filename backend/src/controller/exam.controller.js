@@ -4,8 +4,15 @@ import { broadcastToRoles } from "../controller/notification.controller.js";
 // Create a new exam (draft)
 export const createExam = async (req, res) => {
   try {
-    const { title, durationInMinutes, course, level, examDate, examTime } =
-      req.body;
+    const {
+      title,
+      durationInMinutes,
+      program,
+      course,
+      level,
+      examDate,
+      examTime,
+    } = req.body;
 
     if (!title || !durationInMinutes) {
       return res.status(400).json({
@@ -15,18 +22,25 @@ export const createExam = async (req, res) => {
     }
 
     // Scope the exam to a faculty so other faculties' students can't see it.
-    // Lecturers default to their own faculty; admins may pass one explicitly
-    // (or leave it null to make the exam visible to all faculties).
+    // A faculty may be passed explicitly (admin or lecturer choosing one);
+    // lecturers fall back to their own faculty when none is provided.
     let faculty = req.body.faculty || null;
-    if (req.user.role === "lecturer") {
+    if (req.user.role === "lecturer" && !faculty) {
       faculty = req.user.faculty || null;
     }
+    // Treat the "General" wildcard as "all" (stored as null).
+    if (faculty === "General") faculty = null;
+    const examProgram =
+      !program || program === "General" || program === "All Programs"
+        ? null
+        : program;
 
     const exam = await Exam.create({
       title,
       durationInMinutes: Number.parseInt(durationInMinutes),
       createdBy: req.user.id,
       faculty,
+      program: examProgram,
       // Scope to a course and level so only the right students see it.
       course: course || null,
       level: level || null,
@@ -75,6 +89,15 @@ export const getAllExams = async (req, res) => {
             { faculty: req.user.faculty },
             { faculty: null },
             { faculty: "General" },
+          ],
+        },
+        {
+          $or: [
+            { program: req.user.program },
+            { program: null },
+            { program: "General" },
+            { program: "All Programs" },
+            { program: { $exists: false } },
           ],
         },
         {
@@ -174,13 +197,22 @@ export const addQuestion = async (req, res) => {
       });
     }
 
+    // Points must be zero or above — reject negative scoring.
+    const parsedPoints = points === undefined ? 1 : Number(points);
+    if (Number.isNaN(parsedPoints) || parsedPoints < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Points must be zero or a positive number",
+      });
+    }
+
     const questionNumber = exam.questions.length + 1;
 
     const newQuestion = {
       questionNumber,
       questionType,
       questionText,
-      points: points || 1,
+      points: parsedPoints,
     };
 
     if (questionType === "mcq") {
@@ -483,6 +515,20 @@ export const getExamForStudent = async (req, res) => {
       });
     }
 
+    // Program eligibility — a program-specific exam is only for students of
+    // that program (a null / "General" program means it's open to all programs).
+    if (
+      exam.program &&
+      exam.program !== "General" &&
+      exam.program !== "All Programs" &&
+      exam.program !== req.user.program
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This exam is not available for your program",
+      });
+    }
+
     // Level eligibility — a level-specific exam is only for students of that
     // level (a null level means it's open to all levels).
     const studentLevel = req.user.yearOfStudy
@@ -572,6 +618,15 @@ export const getMyExams = async (req, res) => {
             { faculty: req.user.faculty },
             { faculty: null },
             { faculty: "General" },
+          ],
+        },
+        {
+          $or: [
+            { program: req.user.program },
+            { program: null },
+            { program: "General" },
+            { program: "All Programs" },
+            { program: { $exists: false } },
           ],
         },
         {
@@ -724,8 +779,28 @@ export const gradeTheoryQuestion = async (req, res) => {
       });
     }
 
-    submission.answers[answerIndex].pointsAwarded = pointsAwarded;
-    submission.answers[answerIndex].isCorrect = pointsAwarded > 0;
+    // The awarded score must be zero or above (no negative scoring) and may not
+    // exceed the question's maximum points.
+    const question = exam.questions.find(
+      (q) => q.questionNumber === questionNumber,
+    );
+    const maxPoints = question?.points ?? 0;
+    const awarded = Number(pointsAwarded);
+    if (Number.isNaN(awarded) || awarded < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Points awarded must be zero or a positive number",
+      });
+    }
+    if (awarded > maxPoints) {
+      return res.status(400).json({
+        success: false,
+        message: `Points awarded cannot exceed the question's maximum of ${maxPoints}`,
+      });
+    }
+
+    submission.answers[answerIndex].pointsAwarded = awarded;
+    submission.answers[answerIndex].isCorrect = awarded > 0;
 
     // Recalculate total score
     submission.totalScore = submission.answers.reduce(
@@ -767,11 +842,26 @@ export const updateExam = async (req, res) => {
       });
     }
 
-    const { title, durationInMinutes, course, level, examDate, examTime } =
-      req.body;
+    const {
+      title,
+      durationInMinutes,
+      faculty,
+      program,
+      course,
+      level,
+      examDate,
+      examTime,
+    } = req.body;
 
     if (title) exam.title = title;
     if (durationInMinutes) exam.durationInMinutes = durationInMinutes;
+    if (faculty !== undefined)
+      exam.faculty = faculty && faculty !== "General" ? faculty : null;
+    if (program !== undefined)
+      exam.program =
+        program && program !== "General" && program !== "All Programs"
+          ? program
+          : null;
     if (course !== undefined) exam.course = course || null;
     if (level !== undefined) exam.level = level || null;
     if (examDate !== undefined) exam.examDate = examDate || null;
