@@ -141,8 +141,10 @@ export default function VotingAdmin() {
     positions: DEFAULT_POSITIONS.join(", "),
     startDate: "",
     endDate: "",
-    startTime: "09:00",
-    endTime: "17:00",
+    // Default to a full-day window so a vote created for "today" stays Active
+    // for the whole day instead of being marked completed once 17:00 passes.
+    startTime: "00:00",
+    endTime: "23:59",
   });
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -380,6 +382,17 @@ export default function VotingAdmin() {
       toast.error("Please add at least one candidate");
       return;
     }
+    // Guard against an end date/time that is already in the past — otherwise the
+    // event would be created already "completed".
+    const endsAt = new Date(
+      combineDateTime(formData.endDate, formData.endTime),
+    );
+    if (!Number.isNaN(endsAt.getTime()) && endsAt.getTime() <= Date.now()) {
+      toast.error(
+        "The end date and time are already in the past. Please choose a future end time.",
+      );
+      return;
+    }
     try {
       setActionLoading(true);
       const response = await fetch(`${apiUrl}/voting`, {
@@ -553,8 +566,9 @@ export default function VotingAdmin() {
       positions: DEFAULT_POSITIONS.join(", "),
       startDate: "",
       endDate: "",
-      startTime: "09:00",
-      endTime: "17:00",
+      // Full-day window default (see initial formData for rationale).
+      startTime: "00:00",
+      endTime: "23:59",
     });
     setBallotType("single");
     setCandidates([]);
