@@ -882,6 +882,19 @@ export const publishResults = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Voting not found" });
 
+    // Results may only be published once the voting has actually ended — either
+    // the end date has passed or the admin has disabled the event. Publishing
+    // closes the event and moves it to the Completed tab, so it must not happen
+    // while voting is still open.
+    const hasEnded =
+      !voting.isActive || new Date() > new Date(voting.endDate);
+    if (!hasEnded) {
+      return res.status(400).json({
+        success: false,
+        message: "You can publish results only after the voting has ended",
+      });
+    }
+
     voting.resultsPublished = true;
     await voting.save();
 

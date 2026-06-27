@@ -752,18 +752,41 @@ export default function VotingAdmin() {
                         <Download className="w-4 h-4" />
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedVoting(voting);
-                        if (voting.resultsPublished) setViewDialogOpen(true);
-                        else setPublishDialogOpen(true);
-                      }}
-                      className="border-gray-500 text-gray-300 hover:bg-gray-600"
-                    >
-                      {voting.resultsPublished ? "View" : "Publish"}
-                    </Button>
+                    {voting.resultsPublished ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedVoting(voting);
+                          setViewDialogOpen(true);
+                        }}
+                        className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                      >
+                        View
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        // Results can only be published AFTER the voting has
+                        // ended — publishing closes the event and moves it to
+                        // the Completed tab, so it must not be allowed while a
+                        // vote is still Active or Upcoming.
+                        disabled={status !== "Completed"}
+                        title={
+                          status !== "Completed"
+                            ? "You can publish results only after the voting has ended"
+                            : "Publish the results for this voting"
+                        }
+                        onClick={() => {
+                          setSelectedVoting(voting);
+                          setPublishDialogOpen(true);
+                        }}
+                        className="border-gray-500 text-gray-300 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Publish Results
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="ghost"
