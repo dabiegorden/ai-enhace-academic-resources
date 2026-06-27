@@ -544,6 +544,11 @@ export const getAllVoting = async (req, res) => {
 
     const uid = req.user.id;
 
+    // Admins/lecturers manage and download results, so they must always see the
+    // real tallies even while voting is active and results are unpublished.
+    const isPrivileged =
+      currentUser.role === "admin" || currentUser.role === "lecturer";
+
     const votingEventsWithStatus = visibleEvents.map((voting) => {
       const votingObj = voting.toObject();
 
@@ -561,8 +566,9 @@ export const getAllVoting = async (req, res) => {
       // Per-position status so frontend can show partial completion
       votingObj.votedPositions = Array.from(donePositions);
 
-      // Hide individual vote counts while voting is active and results not published
-      if (voting.isActive && !voting.resultsPublished) {
+      // Hide individual vote counts while voting is active and results not
+      // published — but never from admins/lecturers.
+      if (!isPrivileged && voting.isActive && !voting.resultsPublished) {
         votingObj.candidates = votingObj.candidates.map((c) => ({
           ...c,
           votes: undefined,
@@ -632,7 +638,10 @@ export const getVotingById = async (req, res) => {
     votingData.hasVoted = hasVotedAll;
     votingData.votedPositions = Array.from(donePositions);
 
-    if (voting.isActive && !voting.resultsPublished) {
+    const isPrivileged =
+      currentUser.role === "admin" || currentUser.role === "lecturer";
+
+    if (!isPrivileged && voting.isActive && !voting.resultsPublished) {
       votingData.candidates = votingData.candidates.map((c) => ({
         ...c,
         votes: undefined,

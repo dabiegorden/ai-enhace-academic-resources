@@ -157,15 +157,21 @@ const AdminStudentsPage = () => {
     filterStudents(students, searchTerm, facultyFilter, yearFilter, value);
   };
 
-  // Unique program list derived from loaded students, scoped to the selected
-  // faculty — powers the Program sorting dropdown.
+  // Program list powering the Program sorting dropdown. When a faculty is
+  // selected we show EVERY program defined for that faculty (from the
+  // constants), not just the programs that happen to have enrolled students —
+  // otherwise programs with no students would be missing. We still merge in any
+  // programs found on loaded students so unexpected/legacy values aren't lost.
   const programOptions = Array.from(
-    new Set(
-      students
+    new Set([
+      ...(facultyFilter === "all"
+        ? Object.values(FACULTY_PROGRAMS).flat()
+        : FACULTY_PROGRAMS[facultyFilter] || []),
+      ...students
         .filter((st) => facultyFilter === "all" || st.faculty === facultyFilter)
         .map((st) => st.program)
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ])
   ).sort();
 
   const handleViewStudent = (student: Student) => {

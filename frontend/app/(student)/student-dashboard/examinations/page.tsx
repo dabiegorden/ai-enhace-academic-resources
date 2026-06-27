@@ -594,12 +594,21 @@ export default function StudentsExamPage() {
                 {exams.map((exam) => {
                   const now = new Date();
                   const startTime = new Date(exam.startedAt);
-                  const endTime = new Date(exam.endedAt);
+                  // Active exams have NO global endedAt — each student gets their
+                  // own deadline once they open the exam (set on the backend).
+                  // So we must NOT gate participation on exam.endedAt here, or
+                  // the comparison against an Invalid Date hides the Start button.
+                  const endTime = exam.endedAt ? new Date(exam.endedAt) : null;
                   const alreadySubmitted = submittedExamIds.has(exam._id);
+                  const hasEnded =
+                    exam.status === "ended" || (!!endTime && now > endTime);
+                  const notStarted =
+                    exam.status === "active" && !!exam.startedAt && now < startTime;
                   const canStart =
-                    !alreadySubmitted && now >= startTime && now <= endTime;
-                  const hasEnded = now > endTime;
-                  const notStarted = now < startTime;
+                    !alreadySubmitted &&
+                    exam.status === "active" &&
+                    !hasEnded &&
+                    !notStarted;
 
                   return (
                     <Card

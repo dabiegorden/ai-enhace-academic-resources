@@ -624,19 +624,33 @@ const StudentsAssignments = () => {
                               </p>
                             </div>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              openProtectedFile(
-                                `/assignments/${selectedAssignment?._id}/attachments/${idx}/file`,
-                                { download: true, fileName: file.fileName },
-                              )
-                            }
-                          >
-                            <Download className="size-4 mr-2" />
-                            Download
-                          </Button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                openProtectedFile(
+                                  `/assignments/${selectedAssignment?._id}/attachments/${idx}/file`,
+                                )
+                              }
+                            >
+                              <FileText className="size-4 mr-2" />
+                              Preview
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                openProtectedFile(
+                                  `/assignments/${selectedAssignment?._id}/attachments/${idx}/file`,
+                                  { download: true, fileName: file.fileName },
+                                )
+                              }
+                            >
+                              <Download className="size-4 mr-2" />
+                              Download
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
