@@ -131,7 +131,6 @@ export default function VotingAdmin() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
 
   const [selectedVoting, setSelectedVoting] = useState<Voting | null>(null);
   const [formData, setFormData] = useState<FormData>({
@@ -458,38 +457,6 @@ export default function VotingAdmin() {
     }
   };
 
-  // ── Publish ────────────────────────────────────────────────────────────────
-  const handlePublishResults = async () => {
-    if (!selectedVoting) return;
-    try {
-      setActionLoading(true);
-      const response = await fetch(
-        `${apiUrl}/voting/${selectedVoting._id}/publish-results`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-          },
-          body: JSON.stringify({}),
-        },
-      );
-      if (!response.ok) throw new Error("Failed to publish results");
-      const data = await response.json();
-      const updated = votings.map((v) =>
-        v._id === selectedVoting._id ? data.data : v,
-      );
-      setVotings(updated);
-      filterVotings(updated, searchTerm, typeFilter);
-      setPublishDialogOpen(false);
-      setSelectedVoting(null);
-      toast.success("Results published successfully");
-    } catch {
-      toast.error("Failed to publish results");
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   // ── Delete ─────────────────────────────────────────────────────────────────
   const handleConfirmDelete = async () => {
@@ -832,41 +799,19 @@ export default function VotingAdmin() {
                     >
                       CSV
                     </Button>
-                    {voting.resultsPublished ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedVoting(voting);
-                          setViewDialogOpen(true);
-                        }}
-                        className="border-gray-500 text-gray-300 hover:bg-gray-600"
-                      >
-                        View
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        // Results can only be published AFTER the voting has
-                        // ended — publishing closes the event and moves it to
-                        // the Completed tab, so it must not be allowed while a
-                        // vote is still Active or Upcoming.
-                        disabled={status !== "Completed"}
-                        title={
-                          status !== "Completed"
-                            ? "You can publish results only after the voting has ended"
-                            : "Publish the results for this voting"
-                        }
-                        onClick={() => {
-                          setSelectedVoting(voting);
-                          setPublishDialogOpen(true);
-                        }}
-                        className="border-gray-500 text-gray-300 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Publish Results
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedVoting(voting);
+                        setViewDialogOpen(true);
+                      }}
+                      className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                      title="Preview results — positions, candidates and votes"
+                    >
+                      <Vote className="w-4 h-4 mr-1" />
+                      View Results
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -1432,21 +1377,43 @@ export default function VotingAdmin() {
                 {selectedVoting?.title} — Results
               </DialogTitle>
               {selectedVoting && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleDownloadResults(selectedVoting)}
-                  className="border-green-600 text-green-400 hover:bg-green-900/20 ml-4"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download CSV
-                </Button>
+                <div className="flex items-center gap-2 ml-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDownloadExcel(selectedVoting)}
+                    className="border-green-600 text-green-400 hover:bg-green-900/20"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Excel
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDownloadResults(selectedVoting)}
+                    className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    CSV
+                  </Button>
+                </div>
               )}
             </div>
           </DialogHeader>
 
           {selectedVoting && (
             <div className="space-y-4">
+              {/* Total number of votes cast across the whole event */}
+              <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/30 p-3 flex items-center gap-2">
+                <Vote className="h-5 w-5 text-indigo-300" />
+                <span className="text-white font-semibold">
+                  {totalVotesCast(selectedVoting)}
+                </span>
+                <span className="text-indigo-300 text-sm">
+                  total vote
+                  {totalVotesCast(selectedVoting) !== 1 ? "s" : ""} cast
+                </span>
+              </div>
               <div>
                 <p className="text-sm text-gray-400">Description</p>
                 <p className="text-gray-300">{selectedVoting.description}</p>
@@ -1626,35 +1593,6 @@ export default function VotingAdmin() {
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Publish Dialog ─────────────────────────────────────────────────── */}
-      <Dialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
-        <DialogContent className="bg-gray-900 border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-white">Publish Results</DialogTitle>
-          </DialogHeader>
-          <p className="text-gray-300">
-            Are you sure you want to publish the results for{" "}
-            <span className="font-semibold">{selectedVoting?.title}</span>?
-          </p>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setPublishDialogOpen(false)}
-              className="border-gray-600 text-gray-300 hover:bg-gray-700"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handlePublishResults}
-              disabled={actionLoading}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {actionLoading ? "Publishing..." : "Publish"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
