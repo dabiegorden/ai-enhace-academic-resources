@@ -369,8 +369,10 @@ export default function StudentVotingPage() {
     const now = new Date(),
       start = new Date(v.startDate),
       end = new Date(v.endDate);
-    if (v.isActive && now >= start && now <= end) return "Active";
+    // Publishing results or disabling ends the event regardless of its end date.
+    if (!v.isActive || v.resultsPublished) return "Ended";
     if (now < start) return "Upcoming";
+    if (now >= start && now <= end) return "Active";
     return "Ended";
   };
 

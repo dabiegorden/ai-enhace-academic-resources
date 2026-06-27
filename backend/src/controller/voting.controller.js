@@ -521,14 +521,24 @@ export const getAllVoting = async (req, res) => {
 
     const now = new Date();
     if (status === "active") {
+      // Active = within its time window, still enabled, and results not yet
+      // published. Publishing results (or disabling) effectively ends the vote
+      // so it must drop out of Active even if the end date is still in future.
       query.startDate = { $lte: now };
       query.endDate = { $gte: now };
       query.isActive = true;
+      query.resultsPublished = { $ne: true };
     } else if (status === "upcoming") {
       query.startDate = { $gt: now };
       query.isActive = true;
     } else if (status === "completed") {
-      query.endDate = { $lt: now };
+      // Completed = the end date has passed, OR the admin ended it early by
+      // disabling it or publishing results.
+      query.$or = [
+        { endDate: { $lt: now } },
+        { isActive: false },
+        { resultsPublished: true },
+      ];
     }
 
     const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
