@@ -37,6 +37,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+// Build a forced-download URL for a manifesto file. Cloudinary honours the
+// `fl_attachment` delivery flag to send a Content-Disposition: attachment
+// header; for any other host we just return the original URL.
+const manifestoDownloadUrl = (url: string) => {
+  if (url.includes("/upload/") && url.includes("res.cloudinary.com")) {
+    return url.replace("/upload/", "/upload/fl_attachment/");
+  }
+  return url;
+};
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -1452,15 +1462,27 @@ export default function VotingAdmin() {
                               </p>
                             )}
                             {candidate.manifestoFileUrl && (
-                              <a
-                                href={candidate.manifestoFileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1"
-                              >
-                                <FileText className="h-3 w-3" />
-                                View Manifesto File
-                              </a>
+                              <div className="flex items-center gap-3 mt-1">
+                                <a
+                                  href={candidate.manifestoFileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  Preview
+                                </a>
+                                <a
+                                  href={manifestoDownloadUrl(
+                                    candidate.manifestoFileUrl,
+                                  )}
+                                  download
+                                  className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </a>
+                              </div>
                             )}
                           </div>
                         </div>

@@ -296,9 +296,89 @@ export default function AdminAssignmentsPage() {
     setEditDialogOpen(true);
   };
 
-  const openViewDialog = (assignment: Assignment) => {
-    setSelectedAssignment(assignment);
+  const openViewDialog = async (assignment: Assignment) => {
+    // Show immediately, then load the fully-populated record so submissions
+    // include the student name/email and can be previewed/downloaded.
+    setSelectedAssignment({
+      ...assignment,
+      attachments: assignment.attachments ?? [],
+      submissions: assignment.submissions ?? [],
+    });
     setViewDialogOpen(true);
+    try {
+      const response = await fetch(`${apiUrl}/assignments/${assignment._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSelectedAssignment({
+          ...data.data,
+          attachments: data.data.attachments ?? [],
+          submissions: data.data.submissions ?? [],
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load submissions:", error);
+    }
+  };
+
+  // Fetch a submission file (auth-protected) and open it inline for preview.
+  const previewSubmission = async (submissionId: string) => {
+    if (!selectedAssignment) return;
+    try {
+      const response = await fetch(
+        `${apiUrl}/assignments/${selectedAssignment._id}/submissions/${submissionId}/file`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) {
+        let msg = "File not available";
+        try {
+          const d = await response.json();
+          msg = d.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to preview file",
+      );
+    }
+  };
+
+  // Fetch a submission file (auth-protected) and trigger a download.
+  const downloadSubmission = async (submissionId: string, fileName: string) => {
+    if (!selectedAssignment) return;
+    try {
+      const response = await fetch(
+        `${apiUrl}/assignments/${selectedAssignment._id}/submissions/${submissionId}/file?download=1`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) {
+        let msg = "File not available";
+        try {
+          const d = await response.json();
+          msg = d.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName || "submission";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to download file",
+      );
+    }
   };
 
   // Fetch an attachment (auth-protected) and open it inline for preview.
@@ -855,10 +935,88 @@ export default function AdminAssignmentsPage() {
               )}
 
               <div>
-                <Label>Submissions</Label>
-                <p className="text-sm mt-1">
-                  {selectedAssignment.submissions.length} student(s) submitted
-                </p>
+                <Label>
+                  Submissions ({selectedAssignment.submissions.length})
+                </Label>
+                {selectedAssignment.submissions.length === 0 ? (
+                  <p className="text-sm mt-2 text-muted-foreground">
+                    No students have submitted yet.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {selectedAssignment.submissions.map((sub: any) => {
+                      const student = sub.student || {};
+                      const studentName =
+                        typeof student === "object"
+                          ? `${student.firstName || ""} ${student.lastName || ""}`.trim() ||
+                            "Unknown Student"
+                          : "Unknown Student";
+                      return (
+                        <div
+                          key={sub._id}
+                          className="rounded-lg border p-3 space-y-2"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold">
+                                {studentName}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {typeof student === "object" &&
+                                  (student.studentId || student.email)}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Submitted:{" "}
+                                {sub.submittedAt
+                                  ? new Date(sub.submittedAt).toLocaleString()
+                                  : "—"}
+                              </p>
+                            </div>
+                            <Badge
+                              className={
+                                sub.status === "graded"
+                                  ? "bg-green-100 text-green-700"
+                                  : sub.status === "late"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-blue-100 text-blue-700"
+                              }
+                            >
+                              {sub.status}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 rounded bg-muted p-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="size-4 shrink-0" />
+                              <span className="text-sm truncate">
+                                {sub.fileName}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => previewSubmission(sub._id)}
+                              >
+                                <Eye className="size-4 mr-1" />
+                                Preview
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  downloadSubmission(sub._id, sub.fileName)
+                                }
+                              >
+                                <Download className="size-4 mr-1" />
+                                Download
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}

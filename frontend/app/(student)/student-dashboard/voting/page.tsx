@@ -17,8 +17,19 @@ import {
   Lock,
   RefreshCw,
   X,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
+
+// Build a forced-download URL for a manifesto file. Cloudinary honours the
+// `fl_attachment` delivery flag to send a Content-Disposition: attachment
+// header; for any other host we just return the original URL.
+const manifestoDownloadUrl = (url: string) => {
+  if (url.includes("/upload/") && url.includes("res.cloudinary.com")) {
+    return url.replace("/upload/", "/upload/fl_attachment/");
+  }
+  return url;
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -173,15 +184,25 @@ function CandidateCard({
             </p>
           )}
           {candidate.manifestoFileUrl && (
-            <a
-              href={candidate.manifestoFileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 mt-2 text-xs text-indigo-400 hover:text-indigo-300 font-medium"
-            >
-              <FileText className="w-3 h-3" /> View Manifesto
-            </a>
+            <div className="flex items-center gap-3 mt-2">
+              <a
+                href={candidate.manifestoFileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+              >
+                <FileText className="w-3 h-3" /> Preview
+              </a>
+              <a
+                href={manifestoDownloadUrl(candidate.manifestoFileUrl)}
+                download
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+              >
+                <Download className="w-3 h-3" /> Download
+              </a>
+            </div>
           )}
         </div>
       </div>
@@ -804,14 +825,25 @@ export default function StudentVotingPage() {
                                   </p>
                                 )}
                                 {c.manifestoFileUrl && (
-                                  <a
-                                    href={c.manifestoFileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 mt-1 text-xs text-indigo-400 hover:text-indigo-300"
-                                  >
-                                    <FileText className="w-3 h-3" /> Manifesto
-                                  </a>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <a
+                                      href={c.manifestoFileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+                                    >
+                                      <FileText className="w-3 h-3" /> Preview
+                                    </a>
+                                    <a
+                                      href={manifestoDownloadUrl(
+                                        c.manifestoFileUrl,
+                                      )}
+                                      download
+                                      className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+                                    >
+                                      <Download className="w-3 h-3" /> Download
+                                    </a>
+                                  </div>
                                 )}
                                 {!isUnopposed &&
                                   detailEvent.resultsPublished &&

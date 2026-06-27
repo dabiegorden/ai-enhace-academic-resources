@@ -55,6 +55,10 @@ interface Exam {
   questions: Question[];
   totalPoints: number;
   status: "draft" | "active" | "ended";
+  course?: string | null;
+  level?: string | null;
+  examDate?: string | null;
+  examTime?: string | null;
 }
 
 interface ExamAnswer {
@@ -210,8 +214,13 @@ export default function StudentsExamPage() {
       .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  // Safely format a date — returns a fallback instead of "Invalid Date" when
+  // the value is missing or unparseable (e.g. active exams have no global end).
+  const formatDate = (dateString?: string | null, fallback = "—") => {
+    if (!dateString) return fallback;
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return fallback;
+    return d.toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -658,11 +667,22 @@ export default function StudentsExamPage() {
                         </div>
 
                         <div className="bg-muted rounded-lg p-3 text-xs space-y-1">
+                          {exam.examDate && (
+                            <p className="text-muted-foreground">
+                              <strong>Scheduled:</strong>{" "}
+                              {formatDate(exam.examDate)}
+                              {exam.examTime ? ` at ${exam.examTime}` : ""}
+                            </p>
+                          )}
                           <p className="text-muted-foreground">
-                            <strong>Start:</strong> {formatDate(exam.startedAt)}
+                            <strong>Started:</strong> {formatDate(exam.startedAt)}
                           </p>
                           <p className="text-muted-foreground">
-                            <strong>End:</strong> {formatDate(exam.endedAt)}
+                            <strong>Closes:</strong>{" "}
+                            {formatDate(
+                              exam.endedAt,
+                              `When you finish · ${exam.durationInMinutes} mins after you start`,
+                            )}
                           </p>
                         </div>
 
